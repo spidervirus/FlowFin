@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "FinanceFlow - Modern Accounting Software for Businesses",
+  title: "FlowFin - Modern Accounting Software for Businesses",
   description:
     "Simplify your financial management with our intuitive accounting platform. Track expenses, create invoices, and generate reports with ease.",
 };

@@ -125,7 +125,7 @@ export default function Footer() {
 
         <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-gray-200">
           <div className="text-gray-600 mb-4 md:mb-0">
-            © {currentYear} FinanceFlow Accounting. All rights reserved.
+            © {currentYear} FlowFin Accounting. All rights reserved.
           </div>
 
           <div className="flex space-x-6">

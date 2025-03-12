@@ -16,7 +16,7 @@ export default async function Navbar() {
       <div className="container mx-auto px-4 flex justify-between items-center">
         <Link href="/" prefetch className="text-xl font-bold flex items-center">
           <BarChart3 className="h-6 w-6 text-blue-600 mr-2" />
-          <span>FinanceFlow</span>
+          <span>FlowFin</span>
         </Link>
 
         <div className="hidden md:flex space-x-6">
