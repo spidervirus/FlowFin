@@ -105,9 +105,11 @@ export default function DashboardNavbar() {
             </Button>
           </Link>
 
-          <Button variant="ghost" size="icon" className="hidden md:flex">
-            <Settings className="h-5 w-5 text-gray-500" />
-          </Button>
+          <Link href="/dashboard/settings">
+            <Button variant="ghost" size="icon" className="hidden md:flex">
+              <Settings className="h-5 w-5 text-gray-500" />
+            </Button>
+          </Link>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -123,7 +125,7 @@ export default function DashboardNavbar() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem>
-                <Link href="#" className="flex w-full">
+                <Link href="/dashboard/settings" className="flex w-full">
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </Link>
