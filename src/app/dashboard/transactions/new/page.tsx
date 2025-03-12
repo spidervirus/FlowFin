@@ -17,12 +17,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, CalendarIcon, Save } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "../../../../../supabase/server";
 
-export default async function NewTransactionPage() {
+export default async function NewTransactionPage({
+  searchParams,
+}: {
+  searchParams: { account?: string };
+}) {
   const supabase = await createClient();
 
   const {
@@ -32,6 +36,18 @@ export default async function NewTransactionPage() {
   if (!user) {
     return redirect("/sign-in");
   }
+
+  // Fetch accounts for the dropdown
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id, name")
+    .order("name");
+
+  // Fetch categories for the dropdown
+  const { data: categories } = await supabase
+    .from("categories")
+    .select("id, name, type")
+    .order("name");
 
   return (
     <>
@@ -64,76 +80,101 @@ export default async function NewTransactionPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form className="space-y-6">
+              <form
+                action="/api/transactions"
+                method="POST"
+                className="space-y-6"
+              >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
+                    <Label htmlFor="date">Date</Label>
+                    <Input
+                      id="date"
+                      name="date"
+                      type="date"
+                      defaultValue={new Date().toISOString().split("T")[0]}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="type">Transaction Type</Label>
-                    <Select defaultValue="expense">
+                    <Select name="type" required>
                       <SelectTrigger id="type">
                         <SelectValue placeholder="Select type" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="income">Income</SelectItem>
                         <SelectItem value="expense">Expense</SelectItem>
+                        <SelectItem value="transfer">Transfer</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="date">Date</Label>
-                    <div className="relative">
-                      <Input
-                        id="date"
-                        type="date"
-                        defaultValue={new Date().toISOString().split("T")[0]}
-                      />
-                    </div>
+                    <Label htmlFor="description">Description</Label>
+                    <Input
+                      id="description"
+                      name="description"
+                      placeholder="e.g., Office Supplies"
+                      required
+                    />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="amount">Amount</Label>
-                    <div className="relative">
-                      <Input
-                        id="amount"
-                        type="number"
-                        placeholder="0.00"
-                        step="0.01"
-                        min="0"
-                      />
-                    </div>
+                    <Input
+                      id="amount"
+                      name="amount"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      required
+                    />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="category">Category</Label>
-                    <Select>
-                      <SelectTrigger id="category">
-                        <SelectValue placeholder="Select category" />
+                    <Label htmlFor="account_id">Account</Label>
+                    <Select
+                      name="account_id"
+                      defaultValue={searchParams.account}
+                      required
+                    >
+                      <SelectTrigger id="account_id">
+                        <SelectValue placeholder="Select account" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="sales">Sales</SelectItem>
-                        <SelectItem value="office">Office</SelectItem>
-                        <SelectItem value="software">Software</SelectItem>
-                        <SelectItem value="utilities">Utilities</SelectItem>
-                        <SelectItem value="marketing">Marketing</SelectItem>
-                        <SelectItem value="rent">Rent</SelectItem>
-                        <SelectItem value="payroll">Payroll</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
+                        {accounts?.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Input
-                      id="description"
-                      placeholder="Enter transaction description"
-                    />
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category</Label>
+                    <Select name="category">
+                      <SelectTrigger id="category">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Uncategorized</SelectItem>
+                        {categories?.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="notes">Notes (Optional)</Label>
                     <Textarea
                       id="notes"
+                      name="notes"
                       placeholder="Add any additional notes or details"
                       rows={3}
                     />
@@ -142,7 +183,9 @@ export default async function NewTransactionPage() {
 
                 <div className="flex justify-end gap-3">
                   <Link href="/dashboard/transactions">
-                    <Button variant="outline">Cancel</Button>
+                    <Button variant="outline" type="button">
+                      Cancel
+                    </Button>
                   </Link>
                   <Button type="submit">
                     <Save className="mr-2 h-4 w-4" /> Save Transaction
