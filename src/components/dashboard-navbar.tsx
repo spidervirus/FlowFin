@@ -17,6 +17,7 @@ import {
   Plus,
   Receipt,
   Settings,
+  Sparkles,
   UserCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -77,6 +78,16 @@ export default function DashboardNavbar() {
               >
                 <BarChart3 className="h-4 w-4" />
                 <span>Reports</span>
+              </Button>
+            </Link>
+            <Link href="/dashboard/ai-features">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span>AI Features</span>
               </Button>
             </Link>
           </div>
