@@ -91,7 +91,7 @@ export default function NewGoalPage() {
           target_amount: parseFloat(targetAmount),
           start_date: startDate.toISOString().split('T')[0],
           target_date: targetDate.toISOString().split('T')[0],
-          category_id: categoryId || undefined,
+          category_id: categoryId || null,
           icon,
           color,
         }),
@@ -232,7 +232,7 @@ export default function NewGoalPage() {
                         <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                         {categories
                           .filter(cat => cat.type === 'expense')
                           .map((category) => (
@@ -256,7 +256,7 @@ export default function NewGoalPage() {
                           <SelectValue placeholder="Select an icon" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
                           {iconOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.value} {option.name}
