@@ -108,17 +108,23 @@ export default function PredictiveAnalytics() {
                 ].map((item, index) => (
                   <div
                     key={index}
-                    className={`flex-1 flex flex-col items-center gap-2 ${item.prediction ? "opacity-70" : ""}`}
+                    className={`flex-1 flex flex-col items-center gap-2 ${('prediction' in item && item.prediction) ? "opacity-70" : ""}`}
                   >
                     <div className="w-full flex justify-between items-end h-[240px]">
                       <div
-                        className={`w-[45%] ${item.prediction ? "bg-green-300" : "bg-green-500"} rounded-t`}
-                        style={{ height: `${(item.income / 30000) * 100}%` }}
-                      />
+                        className={`h-[${
+                          item.income > item.expenses ? "60%" : "40%"
+                        }] w-8 bg-green-500 rounded-t-md ${
+                          'prediction' in item && item.prediction ? "bg-opacity-50" : ""
+                        }`}
+                      ></div>
                       <div
-                        className={`w-[45%] ${item.prediction ? "bg-red-300" : "bg-red-500"} rounded-t`}
-                        style={{ height: `${(item.expenses / 30000) * 100}%` }}
-                      />
+                        className={`h-[${
+                          item.income < item.expenses ? "60%" : "40%"
+                        }] w-8 bg-red-500 rounded-t-md ${
+                          'prediction' in item && item.prediction ? "bg-opacity-50" : ""
+                        }`}
+                      ></div>
                     </div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       {item.prediction && (

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const notes = (formData.get("notes") as string) || null;
 
     // Process line items
-    const lineItems = [];
+    const lineItems: Array<{description: string; amount: number; quantity?: number; unit_price?: number}> = [];
     let total_amount = 0;
 
     // Get all form keys to find line items
