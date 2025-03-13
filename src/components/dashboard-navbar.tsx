@@ -1,147 +1,198 @@
 "use client";
 
 import Link from "next/link";
-import { createClient } from "../../supabase/client";
+import { usePathname } from "next/navigation";
+import { signOutAction } from "@/app/actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import { Button } from "./ui/button";
+} from "@/components/ui/dropdown-menu";
 import {
   BarChart3,
+  CreditCard,
   FileText,
   Home,
+  LogOut,
+  Menu,
   PieChart,
-  Plus,
-  Receipt,
   Settings,
-  Sparkles,
-  UserCircle,
+  User,
+  Wallet,
+  DollarSign,
+  Target,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Button } from "./ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 
 export default function DashboardNavbar() {
-  const supabase = createClient();
-  const router = useRouter();
+  const pathname = usePathname();
+
+  const isActive = (path: string) => {
+    return pathname === path || pathname.startsWith(`${path}/`);
+  };
+
+  const navItems = [
+    {
+      name: "Dashboard",
+      href: "/dashboard",
+      icon: <Home className="h-4 w-4 mr-2" />,
+    },
+    {
+      name: "Transactions",
+      href: "/dashboard/transactions",
+      icon: <CreditCard className="h-4 w-4 mr-2" />,
+    },
+    {
+      name: "Accounts",
+      href: "/dashboard/accounts",
+      icon: <Wallet className="h-4 w-4 mr-2" />,
+    },
+    {
+      name: "Budgets",
+      href: "/dashboard/budgets",
+      icon: <DollarSign className="h-4 w-4 mr-2" />,
+    },
+    {
+      name: "Goals",
+      href: "/dashboard/goals",
+      icon: <Target className="h-4 w-4 mr-2" />,
+    },
+    {
+      name: "Reports",
+      href: "/dashboard/reports",
+      icon: <BarChart3 className="h-4 w-4 mr-2" />,
+    },
+    {
+      name: "Invoices",
+      href: "/dashboard/invoices",
+      icon: <FileText className="h-4 w-4 mr-2" />,
+    },
+    {
+      name: "AI Features",
+      href: "/dashboard/ai-features",
+      icon: <PieChart className="h-4 w-4 mr-2" />,
+    },
+  ];
 
   return (
-    <nav className="w-full border-b border-gray-200 bg-white py-4 sticky top-0 z-50">
-      <div className="container mx-auto px-4 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/"
-            prefetch
-            className="text-xl font-bold flex items-center"
-          >
-            <BarChart3 className="h-6 w-6 text-blue-600 mr-2" />
-            <span>FlowFin</span>
+    <header className="sticky top-0 z-50 w-full border-b bg-background">
+      <div className="container flex h-16 items-center justify-between">
+        <div className="flex items-center gap-4 md:gap-8">
+          <Link href="/" className="flex items-center space-x-2">
+            <span className="font-bold text-xl">FlowFin</span>
           </Link>
 
-          <div className="hidden md:flex items-center space-x-1 ml-8">
-            <Link href="/dashboard">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2"
+          <nav className="hidden md:flex gap-6">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center text-sm font-medium transition-colors hover:text-primary ${
+                  isActive(item.href)
+                    ? "text-foreground"
+                    : "text-muted-foreground"
+                }`}
               >
-                <PieChart className="h-4 w-4" />
-                <span>Dashboard</span>
-              </Button>
-            </Link>
-            <Link href="/dashboard/transactions">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                <Receipt className="h-4 w-4" />
-                <span>Transactions</span>
-              </Button>
-            </Link>
-            <Link href="/dashboard/invoices">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                <span>Invoices</span>
-              </Button>
-            </Link>
-            <Link href="/dashboard/reports">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                <BarChart3 className="h-4 w-4" />
-                <span>Reports</span>
-              </Button>
-            </Link>
-            <Link href="/dashboard/ai-features">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                <Sparkles className="h-4 w-4" />
-                <span>AI Features</span>
-              </Button>
-            </Link>
-          </div>
+                {item.name}
+              </Link>
+            ))}
+          </nav>
         </div>
 
-        <div className="flex gap-4 items-center">
-          <Link href="/dashboard/transactions/new">
-            <Button
-              size="sm"
-              variant="outline"
-              className="hidden md:flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              <span>New Transaction</span>
-            </Button>
-          </Link>
-
-          <Link href="/dashboard/settings">
-            <Button variant="ghost" size="icon" className="hidden md:flex">
-              <Settings className="h-5 w-5 text-gray-500" />
-            </Button>
-          </Link>
-
+        <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <UserCircle className="h-6 w-6" />
+              <Button
+                variant="ghost"
+                className="relative h-8 w-8 rounded-full"
+                aria-label="User menu"
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src="" alt="User" />
+                  <AvatarFallback>U</AvatarFallback>
+                </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                <Link href="/" className="flex w-full">
-                  <Home className="mr-2 h-4 w-4" />
-                  <span>Home</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link href="/dashboard/settings" className="flex w-full">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings" className="cursor-pointer">
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </Link>
               </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings/profile" className="cursor-pointer">
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  router.refresh();
+                className="cursor-pointer"
+                onSelect={(e) => {
+                  e.preventDefault();
+                  signOutAction();
                 }}
               >
-                Sign out
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Log out</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                aria-label="Menu"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left">
+              <Link href="/" className="flex items-center space-x-2 mb-8">
+                <span className="font-bold text-xl">FlowFin</span>
+              </Link>
+              <nav className="flex flex-col gap-4">
+                {navItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center text-sm font-medium transition-colors hover:text-primary ${
+                      isActive(item.href)
+                        ? "text-foreground"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {item.icon}
+                    {item.name}
+                  </Link>
+                ))}
+                <Link
+                  href="/dashboard/settings"
+                  className={`flex items-center text-sm font-medium transition-colors hover:text-primary ${
+                    isActive("/dashboard/settings")
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
+                </Link>
+              </nav>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
-    </nav>
+    </header>
   );
 }

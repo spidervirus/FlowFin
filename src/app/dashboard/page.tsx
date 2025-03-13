@@ -7,7 +7,10 @@ import FinancialOverviewCard from "@/components/dashboard-components/financial-o
 import RecentTransactions from "@/components/dashboard-components/recent-transactions";
 import AccountsSummary from "@/components/dashboard-components/accounts-summary";
 import CashFlowChart from "@/components/dashboard-components/cash-flow-chart";
+import BudgetWidget from "@/components/dashboard-components/budget-widget";
+import GoalsWidget from "@/components/dashboard-components/goals-widget";
 import { Button } from "@/components/ui/button";
+import { BudgetTracking } from "@/types/financial";
 
 export default async function Dashboard() {
   const supabase = await createClient();
@@ -18,6 +21,77 @@ export default async function Dashboard() {
 
   if (!user) {
     return redirect("/sign-in");
+  }
+
+  // Get current month for filtering
+  const currentDate = new Date();
+  const currentMonth = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth(),
+    1
+  ).toISOString().split("T")[0];
+
+  // Get active budgets for current month
+  const { data: budgets, error: budgetsError } = await supabase
+    .from("budgets")
+    .select(`
+      *,
+      budget_categories(
+        id,
+        amount,
+        category:categories(id, name, type, color)
+      )
+    `)
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .lte("start_date", currentDate)
+    .gte("end_date", currentDate)
+    .order("created_at", { ascending: false });
+
+  if (budgetsError) {
+    console.error("Error fetching budgets:", budgetsError);
+  }
+
+  // Get budget tracking data for current month
+  let tracking: BudgetTracking[] = [];
+  if (budgets && budgets.length > 0) {
+    const budgetIds = budgets.map((budget) => budget.id);
+    const { data: trackingData, error: trackingError } = await supabase
+      .from("budget_tracking")
+      .select(`
+        *,
+        category:categories(id, name, type, color)
+      `)
+      .in("budget_id", budgetIds)
+      .eq("month", currentMonth);
+
+    if (trackingError) {
+      console.error("Error fetching budget tracking:", trackingError);
+    } else if (trackingData) {
+      tracking = trackingData;
+      
+      // Add tracking data to each budget
+      budgets.forEach((budget) => {
+        budget.tracking = tracking.filter(
+          (item) => item.budget_id === budget.id
+        );
+      });
+    }
+  }
+
+  // Get active goals
+  const { data: goals, error: goalsError } = await supabase
+    .from("financial_goals")
+    .select(`
+      *,
+      category:categories(*)
+    `)
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .order("target_date", { ascending: true });
+
+  if (goalsError) {
+    console.error("Error fetching goals:", goalsError);
   }
 
   return (
@@ -84,6 +158,10 @@ export default async function Dashboard() {
               accounts={[]}
               type="receivable"
             />
+            <BudgetWidget 
+              budgets={budgets || []} 
+              tracking={tracking} 
+            />
           </section>
 
           {/* Recent Transactions */}
@@ -95,6 +173,7 @@ export default async function Dashboard() {
               accounts={[]}
               type="payable"
             />
+            <GoalsWidget goals={goals || []} />
           </section>
 
           {/* Info Section */}

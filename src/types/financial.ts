@@ -77,3 +77,91 @@ export interface ReconciliationItem {
   updated_at: string;
   user_id: string;
 }
+
+export interface Budget {
+  id: string;
+  name: string;
+  description?: string;
+  start_date: string;
+  end_date: string;
+  is_recurring: boolean;
+  recurrence_period?: "monthly" | "quarterly" | "yearly";
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  budget_categories?: BudgetCategory[];
+  tracking?: BudgetTracking[];
+}
+
+export interface BudgetCategory {
+  id: string;
+  budget_id: string;
+  category_id: string;
+  amount: number;
+  created_at: string;
+  updated_at: string;
+  category?: Category;
+}
+
+export interface BudgetTracking {
+  id: string;
+  budget_id: string;
+  category_id: string;
+  month: string;
+  planned_amount: number;
+  actual_amount: number;
+  created_at: string;
+  updated_at: string;
+  category?: Category;
+}
+
+export interface DashboardSettings {
+  id: string;
+  user_id: string;
+  layout: Record<string, any>;
+  theme: string;
+  default_view: string;
+  widgets: DashboardWidget[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DashboardWidget {
+  id: string;
+  position: number;
+  visible: boolean;
+  settings?: Record<string, any>;
+}
+
+export interface FinancialGoal {
+  id: string;
+  name: string;
+  description?: string;
+  target_amount: number;
+  current_amount: number;
+  start_date: string;
+  target_date: string;
+  category_id?: string;
+  is_completed: boolean;
+  is_active: boolean;
+  icon?: string;
+  color?: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  category?: Category;
+  contributions?: GoalContribution[];
+}
+
+export interface GoalContribution {
+  id: string;
+  goal_id: string;
+  amount: number;
+  date: string;
+  notes?: string;
+  transaction_id?: string;
+  created_at: string;
+  updated_at: string;
+  transaction?: Transaction;
+}
