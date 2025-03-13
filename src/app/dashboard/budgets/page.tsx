@@ -18,13 +18,9 @@ export default async function BudgetsPage() {
     return redirect("/sign-in");
   }
 
-  // Get current month for filtering
+  // Get current month for filtering - format as YYYY-MM-DD to avoid time zone issues
   const currentDate = new Date();
-  const currentMonth = new Date(
-    currentDate.getFullYear(),
-    currentDate.getMonth(),
-    1
-  ).toISOString().split("T")[0];
+  const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-01`;
 
   // Get active budgets for current month
   const { data: budgets, error } = await supabase
@@ -32,8 +28,8 @@ export default async function BudgetsPage() {
     .select("*")
     .eq("user_id", user.id)
     .eq("is_active", true)
-    .lte("start_date", currentDate)
-    .gte("end_date", currentDate)
+    .lte("start_date", currentDate.toISOString().split('T')[0])
+    .gte("end_date", currentDate.toISOString().split('T')[0])
     .order("created_at", { ascending: false });
 
   if (error) {
