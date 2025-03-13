@@ -110,9 +110,9 @@ export default function GoalPage({ params }: GoalPageProps) {
     setTargetAmount(goalData.target_amount.toString());
     setStartDate(new Date(goalData.start_date));
     setTargetDate(new Date(goalData.target_date));
-    setCategoryId(goalData.category_id || "");
+    setCategoryId(goalData.category_id || "none");
     setIsActive(goalData.is_active);
-    setIcon(goalData.icon || "");
+    setIcon(goalData.icon || "none");
     setColor(goalData.color || "#3b82f6");
   };
   
@@ -155,9 +155,9 @@ export default function GoalPage({ params }: GoalPageProps) {
           target_amount: parseFloat(targetAmount),
           start_date: startDate.toISOString().split('T')[0],
           target_date: targetDate.toISOString().split('T')[0],
-          category_id: categoryId || undefined,
+          category_id: categoryId === "none" ? null : categoryId || null,
           is_active: isActive,
-          icon,
+          icon: icon === "none" ? null : icon,
           color,
         }),
       });
@@ -460,7 +460,7 @@ export default function GoalPage({ params }: GoalPageProps) {
                                 <SelectValue placeholder="Select a category" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">None</SelectItem>
+                                <SelectItem value="none">None</SelectItem>
                                 {categories
                                   .filter(cat => cat.type === 'expense')
                                   .map((category) => (
@@ -484,7 +484,7 @@ export default function GoalPage({ params }: GoalPageProps) {
                                   <SelectValue placeholder="Select an icon" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="">None</SelectItem>
+                                  <SelectItem value="none">None</SelectItem>
                                   {iconOptions.map((option) => (
                                     <SelectItem key={option.value} value={option.value}>
                                       {option.value} {option.name}
