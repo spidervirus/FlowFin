@@ -89,6 +89,16 @@ export interface ReconciliationItem {
   user_id: string;
 }
 
+export interface ReceiptItem {
+  id: string;
+  transaction_id: string;
+  description: string;
+  amount: number;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+}
+
 export interface Budget {
   id: string;
   name: string;

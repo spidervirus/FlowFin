@@ -96,7 +96,7 @@ export default async function AIFeaturesPage() {
               </CardHeader>
               <CardContent>
                 <CardDescription className="text-sm">
-                  Upload receipt images to automatically extract and create transactions with AI.
+                  Upload receipt images to automatically extract and create transactions with OCR technology.
                 </CardDescription>
               </CardContent>
             </Card>

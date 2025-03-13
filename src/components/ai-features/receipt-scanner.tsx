@@ -53,8 +53,9 @@ export default function ReceiptScanner() {
   const [isPdf, setIsPdf] = useState<boolean>(false);
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [accounts, setAccounts] = useState<{id: string, name: string}[]>([]);
-  const [categories, setCategories] = useState<{id: string, name: string}[]>([]);
+  const [categories, setCategories] = useState<{id: string, name: string, color?: string}[]>([]);
   const [success, setSuccess] = useState<boolean>(false);
   const [uploadMethod, setUploadMethod] = useState<"camera" | "file">("file");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,21 +65,8 @@ export default function ReceiptScanner() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // In a real implementation, you would fetch from your API
-        // For now, we'll use mock data
-        setAccounts([
-          { id: "1", name: "Checking Account" },
-          { id: "2", name: "Credit Card" },
-          { id: "3", name: "Savings Account" }
-        ]);
-        
-        setCategories([
-          { id: "1", name: "Groceries" },
-          { id: "2", name: "Dining" },
-          { id: "3", name: "Shopping" },
-          { id: "4", name: "Transportation" },
-          { id: "5", name: "Utilities" }
-        ]);
+        // We'll fetch accounts and categories when we process the receipt
+        // This ensures we get the most up-to-date data
       } catch (err) {
         setError("Failed to load accounts and categories");
         console.error(err);
@@ -157,37 +145,39 @@ export default function ReceiptScanner() {
     setError(null);
     
     try {
-      // In a real implementation, you would send the image to your API for processing
-      // For now, we'll simulate a response after a delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Create form data to send the file
+      const formData = new FormData();
+      formData.append('file', selectedFile);
       
-      // Mock extracted data
-      const mockData: ExtractedData = {
-        merchant: isPdf ? "Office Supply Store" : "Grocery Store",
-        date: new Date().toISOString().split('T')[0],
-        total: isPdf ? 124.99 : 78.45,
-        items: isPdf ? [
-          { description: "Printer Paper", amount: 24.99 },
-          { description: "Ink Cartridges", amount: 45.99 },
-          { description: "Stapler", amount: 12.99 },
-          { description: "Pens (12 pack)", amount: 8.99 },
-          { description: "Notebooks", amount: 15.99 },
-          { description: "Desk Organizer", amount: 16.04 }
-        ] : [
-          { description: "Milk", amount: 4.99 },
-          { description: "Bread", amount: 3.49 },
-          { description: "Eggs", amount: 5.99 },
-          { description: "Fruits", amount: 12.99 },
-          { description: "Vegetables", amount: 15.99 },
-          { description: "Chicken", amount: 18.99 },
-          { description: "Snacks", amount: 8.99 },
-          { description: "Beverages", amount: 7.02 }
-        ]
-      };
+      // Add a cache-busting parameter to ensure we're not getting cached responses
+      const cacheBuster = `?t=${Date.now()}`;
       
-      setExtractedData(mockData);
+      // Send the file to our API endpoint
+      const response = await fetch(`/api/receipts${cacheBuster}`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to process receipt');
+      }
+      
+      const data = await response.json();
+      
+      // Set the extracted data
+      setExtractedData(data.extractedData);
+      
+      // Update accounts and categories
+      setAccounts(data.accounts);
+      setCategories(data.categories);
+      
+      // If there's only one account, select it automatically
+      if (data.accounts.length === 1) {
+        setSelectedAccount(data.accounts[0].id);
+      }
     } catch (err) {
-      setError("Failed to extract data from receipt");
+      setError(err instanceof Error ? err.message : "Failed to extract data from receipt");
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -209,9 +199,29 @@ export default function ReceiptScanner() {
     setError(null);
     
     try {
-      // In a real implementation, you would send the transaction data to your API
-      // For now, we'll simulate a successful response after a delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Create the transaction using the extracted data
+      const response = await fetch('/api/transactions/receipt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          description: extractedData.merchant,
+          amount: extractedData.total,
+          date: extractedData.date,
+          type: 'expense',
+          account_id: selectedAccount,
+          category_id: selectedCategory === "auto" ? null : selectedCategory,
+          status: 'completed',
+          notes: `Receipt scanned on ${new Date().toLocaleDateString()}. Contains ${extractedData.items.length} items.`,
+          items: extractedData.items
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create transaction');
+      }
       
       setSuccess(true);
       
@@ -223,7 +233,7 @@ export default function ReceiptScanner() {
         setSuccess(false);
       }, 3000);
     } catch (err) {
-      setError("Failed to create transaction");
+      setError(err instanceof Error ? err.message : "Failed to create transaction");
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -487,7 +497,10 @@ export default function ReceiptScanner() {
                   
                   <div>
                     <Label htmlFor="category">Category</Label>
-                    <Select>
+                    <Select
+                      value={selectedCategory}
+                      onValueChange={setSelectedCategory}
+                    >
                       <SelectTrigger id="category">
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
@@ -512,20 +525,105 @@ export default function ReceiptScanner() {
                           <tr>
                             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                            <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Edit</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                           {extractedData.items.map((item, index) => (
                             <tr key={index}>
-                              <td className="px-4 py-2 text-sm">{item.description}</td>
-                              <td className="px-4 py-2 text-sm text-right">${item.amount.toFixed(2)}</td>
+                              <td className="px-4 py-2 text-sm">
+                                <Input 
+                                  value={item.description} 
+                                  onChange={(e) => {
+                                    const updatedItems = [...extractedData.items];
+                                    updatedItems[index] = {
+                                      ...updatedItems[index],
+                                      description: e.target.value
+                                    };
+                                    setExtractedData({
+                                      ...extractedData,
+                                      items: updatedItems
+                                    });
+                                  }}
+                                  className="h-8 text-sm"
+                                />
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right">
+                                <Input 
+                                  type="number"
+                                  step="0.01"
+                                  value={item.amount} 
+                                  onChange={(e) => {
+                                    const updatedItems = [...extractedData.items];
+                                    updatedItems[index] = {
+                                      ...updatedItems[index],
+                                      amount: parseFloat(e.target.value) || 0
+                                    };
+                                    
+                                    // Recalculate total
+                                    const newTotal = updatedItems.reduce(
+                                      (sum, item) => sum + item.amount, 0
+                                    );
+                                    
+                                    setExtractedData({
+                                      ...extractedData,
+                                      items: updatedItems,
+                                      total: newTotal
+                                    });
+                                  }}
+                                  className="h-8 text-sm text-right"
+                                />
+                              </td>
+                              <td className="px-4 py-2 text-sm text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    const updatedItems = extractedData.items.filter((_, i) => i !== index);
+                                    
+                                    // Recalculate total
+                                    const newTotal = updatedItems.reduce(
+                                      (sum, item) => sum + item.amount, 0
+                                    );
+                                    
+                                    setExtractedData({
+                                      ...extractedData,
+                                      items: updatedItems,
+                                      total: newTotal
+                                    });
+                                  }}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
+                                    <path d="M3 6h18"></path>
+                                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                                  </svg>
+                                </Button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                    <div className="bg-gray-50 px-4 py-2 border-t flex justify-between">
-                      <span className="font-medium">Total</span>
+                    <div className="bg-gray-50 px-4 py-2 border-t flex justify-between items-center">
+                      <div className="flex items-center">
+                        <span className="font-medium mr-2">Total</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const updatedItems = [...extractedData.items, { description: "New Item", amount: 0 }];
+                            setExtractedData({
+                              ...extractedData,
+                              items: updatedItems
+                            });
+                          }}
+                          className="h-7 text-xs"
+                        >
+                          + Add Item
+                        </Button>
+                      </div>
                       <span className="font-medium">${extractedData.total.toFixed(2)}</span>
                     </div>
                   </div>
@@ -555,7 +653,7 @@ export default function ReceiptScanner() {
       </CardContent>
       <CardFooter className="border-t px-6 py-4">
         <p className="text-xs text-muted-foreground">
-          This feature uses AI to extract data from receipt images and PDFs. For best results with images, ensure the receipt is well-lit, flat, and all text is clearly visible. For PDFs, make sure the text is selectable and not just an image. The extracted data can be edited before creating the transaction.
+          This feature uses Tesseract OCR (an open source OCR engine) to extract data from receipt images and PDFs. For best results with images, ensure the receipt is well-lit, flat, and all text is clearly visible. For PDFs, make sure the text is selectable and not just an image. The extracted data can be edited before creating the transaction.
         </p>
       </CardFooter>
     </Card>
