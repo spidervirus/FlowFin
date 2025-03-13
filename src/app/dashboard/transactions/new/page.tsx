@@ -21,6 +21,8 @@ import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "../../../../../supabase/server";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 
 export default async function NewTransactionPage({
   searchParams,
@@ -180,6 +182,59 @@ export default async function NewTransactionPage({
                       placeholder="Add any additional notes or details"
                       rows={3}
                     />
+                  </div>
+                </div>
+
+                {/* Recurring Transaction Section */}
+                <div className="pt-4">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Switch id="is_recurring" name="is_recurring" />
+                    <Label htmlFor="is_recurring">Make this a recurring transaction</Label>
+                  </div>
+                  
+                  <div className="pl-8 space-y-6 border-l-2 border-gray-100">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="recurrence_frequency">Frequency</Label>
+                        <Select name="recurrence_frequency">
+                          <SelectTrigger id="recurrence_frequency">
+                            <SelectValue placeholder="Select frequency" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="daily">Daily</SelectItem>
+                            <SelectItem value="weekly">Weekly</SelectItem>
+                            <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                            <SelectItem value="quarterly">Quarterly</SelectItem>
+                            <SelectItem value="yearly">Yearly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="recurrence_start_date">Start Date</Label>
+                        <Input
+                          id="recurrence_start_date"
+                          name="recurrence_start_date"
+                          type="date"
+                          defaultValue={new Date().toISOString().split("T")[0]}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="recurrence_end_date">End Date (Optional)</Label>
+                        <Input
+                          id="recurrence_end_date"
+                          name="recurrence_end_date"
+                          type="date"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm text-muted-foreground">
+                      <p>Recurring transactions will be automatically created based on the frequency you select.</p>
+                      <p>You can edit or cancel this recurring schedule at any time.</p>
+                    </div>
                   </div>
                 </div>
 

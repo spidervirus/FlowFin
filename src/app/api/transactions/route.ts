@@ -1,6 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../../supabase/server";
 
+// Helper function to calculate next occurrence date based on frequency
+function calculateNextOccurrenceDate(
+  startDate: string,
+  frequency: string
+): string {
+  const date = new Date(startDate);
+  
+  switch (frequency) {
+    case "daily":
+      date.setDate(date.getDate() + 1);
+      break;
+    case "weekly":
+      date.setDate(date.getDate() + 7);
+      break;
+    case "biweekly":
+      date.setDate(date.getDate() + 14);
+      break;
+    case "monthly":
+      date.setMonth(date.getMonth() + 1);
+      break;
+    case "quarterly":
+      date.setMonth(date.getMonth() + 3);
+      break;
+    case "yearly":
+      date.setFullYear(date.getFullYear() + 1);
+      break;
+    default:
+      return "";
+  }
+  
+  return date.toISOString().split("T")[0];
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
 
@@ -22,14 +55,34 @@ export async function POST(request: NextRequest) {
     const description = formData.get("description") as string;
     const amount = parseFloat(formData.get("amount") as string);
     const type = formData.get("type") as string;
-    const category_id = (formData.get("category") as string) || null;
+    const categoryValue = formData.get("category") as string;
+    const category_id = categoryValue === "uncategorized" ? null : categoryValue || null;
     const account_id = formData.get("account_id") as string;
     const notes = (formData.get("notes") as string) || null;
+    
+    // Extract recurring transaction data
+    const is_recurring = formData.get("is_recurring") === "on";
+    const recurrence_frequency = is_recurring ? (formData.get("recurrence_frequency") as string) : null;
+    const recurrence_start_date = is_recurring ? (formData.get("recurrence_start_date") as string) : null;
+    const recurrence_end_date = is_recurring ? (formData.get("recurrence_end_date") as string || null) : null;
+    
+    // Calculate next occurrence date if this is a recurring transaction
+    const next_occurrence_date = is_recurring && recurrence_frequency 
+      ? calculateNextOccurrenceDate(recurrence_start_date || date, recurrence_frequency)
+      : null;
 
     // Validate required fields
     if (!date || !description || isNaN(amount) || !type || !account_id) {
       return NextResponse.json(
         { error: "Date, description, amount, type, and account are required" },
+        { status: 400 },
+      );
+    }
+    
+    // Validate recurring transaction fields if is_recurring is true
+    if (is_recurring && !recurrence_frequency) {
+      return NextResponse.json(
+        { error: "Frequency is required for recurring transactions" },
         { status: 400 },
       );
     }
@@ -83,12 +136,17 @@ export async function POST(request: NextRequest) {
           account_id,
           status: "completed",
           notes,
+          is_recurring,
+          recurrence_frequency,
+          recurrence_start_date: recurrence_start_date || date,
+          recurrence_end_date,
+          next_occurrence_date,
           user_id: user.id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
       ])
-      .select()
+      .select("id")
       .single();
 
     if (error) {
@@ -136,7 +194,13 @@ export async function PUT(request: NextRequest) {
 
   try {
     // Get JSON data
-    const { id, ...updates } = await request.json();
+    const { id, category, ...otherUpdates } = await request.json();
+    
+    // Handle category_id correctly
+    const updates = {
+      ...otherUpdates,
+      category_id: category === "uncategorized" ? null : category || null
+    };
 
     if (!id) {
       return NextResponse.json(

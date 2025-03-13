@@ -8,6 +8,12 @@ export interface Transaction {
   account_id: string;
   status: "pending" | "completed" | "reconciled";
   notes?: string;
+  is_recurring?: boolean;
+  recurrence_frequency?: "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+  recurrence_start_date?: string;
+  recurrence_end_date?: string;
+  next_occurrence_date?: string;
+  parent_transaction_id?: string;
   created_at: string;
   updated_at: string;
   user_id: string;
