@@ -4,7 +4,12 @@ export interface Transaction {
   description: string;
   amount: number;
   type: "income" | "expense" | "transfer";
-  category: string;
+  category: string | {
+    id: string;
+    name: string;
+    type: string;
+    color?: string;
+  };
   account_id: string;
   status: "pending" | "completed" | "reconciled";
   notes?: string;

@@ -1,6 +1,8 @@
 import DashboardNavbar from "@/components/dashboard-navbar";
 import SpendingInsights from "@/components/ai-features/spending-insights";
 import ReceiptScanner from "@/components/ai-features/receipt-scanner";
+import SmartBudgeting from "@/components/ai-features/smart-budgeting";
+import FutureForecasting from "@/components/ai-features/future-forecasting";
 import { redirect } from "next/navigation";
 import { createClient } from "../../../../supabase/server";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -114,43 +116,11 @@ export default async function AIFeaturesPage() {
             </TabsContent>
             
             <TabsContent value="smart-budgeting">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Smart Budgeting</CardTitle>
-                  <CardDescription>
-                    AI-powered budget recommendations
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex items-center justify-center h-64">
-                  <div className="text-center">
-                    <Lightbulb className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Coming Soon</h3>
-                    <p className="text-muted-foreground max-w-md">
-                      We're working on intelligent budget recommendations based on your spending patterns and financial goals.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <SmartBudgeting />
             </TabsContent>
             
             <TabsContent value="future-forecasting">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Future Forecasting</CardTitle>
-                  <CardDescription>
-                    Predict your future financial situation
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex items-center justify-center h-64">
-                  <div className="text-center">
-                    <Sparkles className="h-12 w-12 text-purple-500 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Coming Soon</h3>
-                    <p className="text-muted-foreground max-w-md">
-                      We're developing advanced forecasting models to help you predict and plan for your financial future.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <FutureForecasting />
             </TabsContent>
             
             <TabsContent value="receipt-scanner">
