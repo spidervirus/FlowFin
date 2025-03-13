@@ -78,9 +78,11 @@ interface RecurringTransaction {
   start_date: string;
   frequency: string;
   type: string;
-  category?: {
+  category?: string | {
+    id: string;
     name: string;
-    color: string;
+    type: string;
+    color?: string;
   };
 }
 
@@ -108,6 +110,42 @@ export default function FutureForecasting() {
   const isCategoryObject = (category: Transaction['category']): category is { id: string; name: string; type: string; color?: string } => {
     return typeof category !== 'string';
   };
+  
+  // Helper function to safely extract category information
+  const getCategoryInfo = (transaction: Transaction, categoriesArray: Category[]): { id: string; name: string; color: string } | null => {
+    try {
+      if (!transaction.category) {
+        return null;
+      }
+      
+      if (isCategoryObject(transaction.category)) {
+        // Category is already an object
+        return {
+          id: transaction.category.id || '',
+          name: transaction.category.name || 'Uncategorized',
+          color: transaction.category.color || '#888888'
+        };
+      } else {
+        // Category is a string ID, look it up in the categories array
+        const categoryId = transaction.category;
+        const foundCategory = categoriesArray.find(c => c.id === categoryId);
+        
+        if (foundCategory) {
+          return {
+            id: foundCategory.id,
+            name: foundCategory.name,
+            color: foundCategory.color || '#888888'
+          };
+        } else {
+          console.warn(`Category not found for ID: ${categoryId}`);
+          return null;
+        }
+      }
+    } catch (err) {
+      console.error("Error extracting category info:", err);
+      return null;
+    }
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -117,6 +155,7 @@ export default function FutureForecasting() {
       const supabase = createClient();
       
       // Fetch categories
+      console.log("Fetching categories...");
       const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
         .select("*")
@@ -125,7 +164,11 @@ export default function FutureForecasting() {
       
       if (categoriesError) {
         console.error("Error fetching categories:", categoriesError);
-        throw categoriesError;
+        throw new Error(`Failed to fetch categories: ${categoriesError.message}`);
+      }
+      
+      if (!categoriesData || categoriesData.length === 0) {
+        console.warn("No active categories found");
       }
       
       // Fetch transactions for the last 12 months
@@ -140,6 +183,7 @@ export default function FutureForecasting() {
       let transactionsError;
       
       try {
+        console.log("Attempting to fetch transactions with category join...");
         const result = await supabase
           .from("transactions")
           .select(`
@@ -151,26 +195,44 @@ export default function FutureForecasting() {
           
         transactionsData = result.data;
         transactionsError = result.error;
+        
+        if (transactionsError) {
+          throw transactionsError;
+        }
+        
+        console.log("Successfully fetched transactions with category join");
       } catch (err) {
         console.error("Error with joined transaction query:", err);
         
         // Fallback to simpler query if the join fails
-        const fallbackResult = await supabase
-          .from("transactions")
-          .select("*")
-          .gte("date", twelveMonthsAgoStr)
-          .order("date", { ascending: false });
+        console.log("Falling back to simple transaction query without join...");
+        try {
+          const fallbackResult = await supabase
+            .from("transactions")
+            .select("*")
+            .gte("date", twelveMonthsAgoStr)
+            .order("date", { ascending: false });
+            
+          transactionsData = fallbackResult.data;
+          transactionsError = fallbackResult.error;
           
-        transactionsData = fallbackResult.data;
-        transactionsError = fallbackResult.error;
+          if (transactionsError) {
+            throw transactionsError;
+          }
+          
+          console.log("Successfully fetched transactions with fallback query");
+        } catch (fallbackErr) {
+          console.error("Error with fallback transaction query:", fallbackErr);
+          throw new Error(`Failed to fetch transactions: ${fallbackErr instanceof Error ? fallbackErr.message : 'Unknown error'}`);
+        }
       }
       
-      if (transactionsError) {
-        console.error("Error fetching transactions:", transactionsError);
-        throw transactionsError;
+      if (!transactionsData || transactionsData.length === 0) {
+        console.warn("No transactions found for the last 12 months");
       }
       
       // Fetch recurring transactions
+      console.log("Fetching recurring transactions...");
       const { data: recurringData, error: recurringError } = await supabase
         .from("recurring_transactions")
         .select(`
@@ -181,21 +243,77 @@ export default function FutureForecasting() {
       
       if (recurringError) {
         console.error("Error fetching recurring transactions:", recurringError);
-        throw recurringError;
+        throw new Error(`Failed to fetch recurring transactions: ${recurringError.message}`);
+      }
+      
+      if (!recurringData || recurringData.length === 0) {
+        console.warn("No active recurring transactions found");
       }
       
       console.log("Categories data:", categoriesData?.length || 0, "items");
       console.log("Transactions data:", transactionsData?.length || 0, "items");
       console.log("Recurring data:", recurringData?.length || 0, "items");
       
-      // Log a sample transaction to debug category structure
+      // Validate and clean transaction data
+      let validTransactions: Transaction[] = [];
+      let invalidCount = 0;
+      
       if (transactionsData && transactionsData.length > 0) {
+        // Log a sample transaction to debug category structure
         console.log("Sample transaction:", JSON.stringify(transactionsData[0], null, 2));
+        
+        validTransactions = transactionsData.filter(transaction => {
+          try {
+            // Basic validation
+            if (!transaction.id) {
+              console.warn("Skipping transaction with missing ID");
+              invalidCount++;
+              return false;
+            }
+            
+            if (!transaction.date) {
+              console.warn(`Skipping transaction with missing date: ${transaction.id}`);
+              invalidCount++;
+              return false;
+            }
+            
+            if (typeof transaction.amount !== 'number' && isNaN(Number(transaction.amount))) {
+              console.warn(`Skipping transaction with invalid amount: ${transaction.id}, ${transaction.amount}`);
+              invalidCount++;
+              return false;
+            }
+            
+            // Ensure amount is a number
+            transaction.amount = Number(transaction.amount);
+            
+            // Ensure date is in YYYY-MM-DD format
+            if (!transaction.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+              try {
+                const dateObj = new Date(transaction.date);
+                transaction.date = dateObj.toISOString().split('T')[0];
+              } catch (err) {
+                console.warn(`Skipping transaction with invalid date format: ${transaction.id}, ${transaction.date}`);
+                invalidCount++;
+                return false;
+              }
+            }
+            
+            return true;
+          } catch (err) {
+            console.error(`Error validating transaction ${transaction?.id || 'unknown'}:`, err);
+            invalidCount++;
+            return false;
+          }
+        });
+        
+        if (invalidCount > 0) {
+          console.warn(`Filtered out ${invalidCount} invalid transactions`);
+        }
       }
       
       // Ensure we have arrays even if the data is null
       setCategories(categoriesData || []);
-      setTransactions(transactionsData || []);
+      setTransactions(validTransactions);
       
       // Generate upcoming expenses from recurring transactions
       if (recurringData && recurringData.length > 0) {
@@ -205,31 +323,73 @@ export default function FutureForecasting() {
         } catch (upcomingError) {
           console.error("Error generating upcoming expenses:", upcomingError);
           // Don't throw here, just log the error and continue
+          setUpcomingExpenses([]);
         }
       } else {
         setUpcomingExpenses([]);
       }
       
       setIsLoading(false);
+      
+      // If we have no transactions, show a warning to the user
+      if (validTransactions.length === 0) {
+        setError("No transaction data available for the last 12 months. Please add some transactions to see forecasts.");
+      }
     } catch (err) {
       console.error("Error fetching data:", err);
       setError(`Failed to load data: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setIsLoading(false);
+      
+      // Set empty arrays for all data to prevent null reference errors
+      setCategories([]);
+      setTransactions([]);
+      setUpcomingExpenses([]);
     }
   };
 
   const generateForecasts = () => {
     try {
+      console.log("Generating forecasts...");
+      
+      if (!transactions || transactions.length === 0) {
+        console.warn("No transactions available for generating forecasts");
+        setMonthlyData([]);
+        setCategoryForecasts([]);
+        return;
+      }
+      
+      if (!categories || categories.length === 0) {
+        console.warn("No categories available for generating forecasts");
+        // We can still generate monthly data without categories
+      }
+      
       // Generate monthly historical and forecast data
-      const monthly = generateMonthlyData();
-      setMonthlyData(monthly);
+      try {
+        console.log("Generating monthly data...");
+        const monthly = generateMonthlyData();
+        setMonthlyData(monthly);
+        console.log(`Generated ${monthly.length} monthly data points`);
+      } catch (monthlyError) {
+        console.error("Error generating monthly data:", monthlyError);
+        setMonthlyData([]);
+        // Continue to try category forecasts
+      }
       
       // Generate category forecasts
-      const forecasts = generateCategoryForecasts();
-      setCategoryForecasts(forecasts);
+      try {
+        console.log("Generating category forecasts...");
+        const forecasts = generateCategoryForecasts();
+        setCategoryForecasts(forecasts);
+        console.log(`Generated ${forecasts.length} category forecasts`);
+      } catch (categoryError) {
+        console.error("Error generating category forecasts:", categoryError);
+        setCategoryForecasts([]);
+      }
     } catch (err) {
       console.error("Error generating forecasts:", err);
       setError("Failed to generate forecasts. Please try again.");
+      setMonthlyData([]);
+      setCategoryForecasts([]);
     }
   };
 
@@ -422,40 +582,24 @@ export default function FutureForecasting() {
     let skippedCount = 0;
     
     transactions.forEach(transaction => {
-      if (transaction.type === 'expense' && transaction.category) {
+      if (transaction.type === 'expense') {
         try {
-          // Handle both string category IDs and object categories
-          let categoryId: string;
-          let categoryObj: { id: string; name: string; type: string; color?: string } | null = null;
-          
-          if (isCategoryObject(transaction.category)) {
-            categoryId = transaction.category.id;
-            categoryObj = transaction.category;
-          } else {
-            // If category is just a string ID, look it up in the categories array
-            categoryId = transaction.category;
-            const foundCategory = categories.find(c => c.id === categoryId);
-            if (foundCategory) {
-              categoryObj = {
-                id: foundCategory.id,
-                name: foundCategory.name,
-                type: foundCategory.type,
-                color: foundCategory.color
-              };
-            }
-          }
-          
-          if (!categoryId) {
-            console.warn("Transaction category missing ID:", transaction.id);
-            skippedCount++;
-            return;
-          }
-          
           if (!transaction.date) {
             console.warn("Transaction missing date:", transaction.id);
             skippedCount++;
             return;
           }
+          
+          // Get category information using the helper function
+          const categoryInfo = getCategoryInfo(transaction, categories);
+          
+          if (!categoryInfo) {
+            console.warn(`Skipping transaction with missing or invalid category: ${transaction.id}`);
+            skippedCount++;
+            return;
+          }
+          
+          const categoryId = categoryInfo.id;
           
           const month = transaction.date.substring(0, 7); // YYYY-MM format
           
@@ -569,55 +713,161 @@ export default function FutureForecasting() {
       forecastEndDate.setMonth(today.getMonth() + 12);
     }
     
+    console.log(`Generating upcoming expenses from ${recurringTransactions.length} recurring transactions`);
+    console.log(`Forecast period: ${today.toISOString().split('T')[0]} to ${forecastEndDate.toISOString().split('T')[0]}`);
+    
+    // Count how many transactions we process successfully
+    let processedCount = 0;
+    let skippedCount = 0;
+    
     recurringTransactions.forEach(recurring => {
-      if (recurring.type !== 'expense') return;
-      
-      const startDate = new Date(recurring.start_date);
-      let nextDate = new Date(startDate);
-      
-      // Find the next occurrence after today
-      while (nextDate < today) {
-        if (recurring.frequency === 'weekly') {
-          nextDate.setDate(nextDate.getDate() + 7);
-        } else if (recurring.frequency === 'biweekly') {
-          nextDate.setDate(nextDate.getDate() + 14);
-        } else if (recurring.frequency === 'monthly') {
-          nextDate.setMonth(nextDate.getMonth() + 1);
-        } else if (recurring.frequency === 'quarterly') {
-          nextDate.setMonth(nextDate.getMonth() + 3);
-        } else if (recurring.frequency === 'yearly') {
-          nextDate.setFullYear(nextDate.getFullYear() + 1);
+      try {
+        // Validate the recurring transaction
+        if (!recurring.id) {
+          console.warn("Skipping recurring transaction with missing ID");
+          skippedCount++;
+          return;
         }
-      }
-      
-      // Add all occurrences within the forecast period
-      while (nextDate <= forecastEndDate) {
-        upcoming.push({
-          id: `${recurring.id}-${nextDate.toISOString()}`,
-          description: recurring.description,
-          amount: recurring.amount,
-          date: nextDate.toISOString().split('T')[0],
-          category: recurring.category?.name || 'Uncategorized',
-          categoryColor: recurring.category?.color || '#888888',
-          isRecurring: true
-        });
         
-        // Move to next occurrence
-        if (recurring.frequency === 'weekly') {
-          nextDate.setDate(nextDate.getDate() + 7);
-        } else if (recurring.frequency === 'biweekly') {
-          nextDate.setDate(nextDate.getDate() + 14);
-        } else if (recurring.frequency === 'monthly') {
-          nextDate.setMonth(nextDate.getMonth() + 1);
-        } else if (recurring.frequency === 'quarterly') {
-          nextDate.setMonth(nextDate.getMonth() + 3);
-        } else if (recurring.frequency === 'yearly') {
-          nextDate.setFullYear(nextDate.getFullYear() + 1);
-        } else {
-          break; // Unknown frequency
+        if (!recurring.start_date) {
+          console.warn(`Skipping recurring transaction with missing start date: ${recurring.id}`);
+          skippedCount++;
+          return;
         }
+        
+        if (!recurring.frequency) {
+          console.warn(`Skipping recurring transaction with missing frequency: ${recurring.id}`);
+          skippedCount++;
+          return;
+        }
+        
+        if (recurring.type !== 'expense') {
+          // Skip non-expenses silently
+          return;
+        }
+        
+        if (typeof recurring.amount !== 'number' && isNaN(Number(recurring.amount))) {
+          console.warn(`Skipping recurring transaction with invalid amount: ${recurring.id}, ${recurring.amount}`);
+          skippedCount++;
+          return;
+        }
+        
+        const amount = Number(recurring.amount);
+        if (amount <= 0) {
+          console.warn(`Skipping recurring transaction with zero or negative amount: ${recurring.id}, ${amount}`);
+          skippedCount++;
+          return;
+        }
+        
+        // Get category information
+        let categoryName = 'Uncategorized';
+        let categoryColor = '#888888';
+        
+        if (recurring.category) {
+          // Use the isCategoryObject helper function
+          if (isCategoryObject(recurring.category)) {
+            categoryName = recurring.category.name || 'Uncategorized';
+            categoryColor = recurring.category.color || '#888888';
+          } else if (typeof recurring.category === 'string') {
+            // If category is a string ID, try to find it in the categories array
+            const foundCategory = categories.find(c => c.id === recurring.category);
+            if (foundCategory) {
+              categoryName = foundCategory.name;
+              categoryColor = foundCategory.color || '#888888';
+            }
+          }
+        }
+        
+        // Parse the start date
+        let startDate: Date;
+        try {
+          startDate = new Date(recurring.start_date);
+          if (isNaN(startDate.getTime())) {
+            throw new Error("Invalid date");
+          }
+        } catch (err) {
+          console.warn(`Skipping recurring transaction with invalid start date: ${recurring.id}, ${recurring.start_date}`);
+          skippedCount++;
+          return;
+        }
+        
+        let nextDate = new Date(startDate);
+        
+        // Find the next occurrence after today
+        while (nextDate < today) {
+          if (recurring.frequency === 'weekly') {
+            nextDate.setDate(nextDate.getDate() + 7);
+          } else if (recurring.frequency === 'biweekly') {
+            nextDate.setDate(nextDate.getDate() + 14);
+          } else if (recurring.frequency === 'monthly') {
+            nextDate.setMonth(nextDate.getMonth() + 1);
+          } else if (recurring.frequency === 'quarterly') {
+            nextDate.setMonth(nextDate.getMonth() + 3);
+          } else if (recurring.frequency === 'yearly') {
+            nextDate.setFullYear(nextDate.getFullYear() + 1);
+          } else {
+            console.warn(`Skipping recurring transaction with unknown frequency: ${recurring.id}, ${recurring.frequency}`);
+            skippedCount++;
+            return;
+          }
+        }
+        
+        // Add all occurrences within the forecast period
+        let occurrenceCount = 0;
+        const maxOccurrences = 50; // Safety limit to prevent infinite loops
+        
+        while (nextDate <= forecastEndDate && occurrenceCount < maxOccurrences) {
+          try {
+            upcoming.push({
+              id: `${recurring.id}-${nextDate.toISOString()}`,
+              description: recurring.description || 'Unnamed Recurring Expense',
+              amount: amount,
+              date: nextDate.toISOString().split('T')[0],
+              category: categoryName,
+              categoryColor: categoryColor,
+              isRecurring: true
+            });
+            
+            occurrenceCount++;
+            
+            // Move to next occurrence
+            if (recurring.frequency === 'weekly') {
+              nextDate.setDate(nextDate.getDate() + 7);
+            } else if (recurring.frequency === 'biweekly') {
+              nextDate.setDate(nextDate.getDate() + 14);
+            } else if (recurring.frequency === 'monthly') {
+              nextDate.setMonth(nextDate.getMonth() + 1);
+            } else if (recurring.frequency === 'quarterly') {
+              nextDate.setMonth(nextDate.getMonth() + 3);
+            } else if (recurring.frequency === 'yearly') {
+              nextDate.setFullYear(nextDate.getFullYear() + 1);
+            } else {
+              break; // Unknown frequency
+            }
+          } catch (err) {
+            console.error(`Error adding occurrence for recurring transaction ${recurring.id}:`, err);
+            break;
+          }
+        }
+        
+        if (occurrenceCount > 0) {
+          processedCount++;
+        } else {
+          console.warn(`No occurrences generated for recurring transaction: ${recurring.id}`);
+          skippedCount++;
+        }
+        
+        if (occurrenceCount >= maxOccurrences) {
+          console.warn(`Reached maximum occurrences (${maxOccurrences}) for recurring transaction: ${recurring.id}`);
+        }
+      } catch (err) {
+        console.error(`Error processing recurring transaction ${recurring.id}:`, err);
+        skippedCount++;
       }
     });
+    
+    console.log(`Upcoming expenses: processed ${processedCount} recurring transactions, skipped ${skippedCount}`);
+    console.log(`Generated ${upcoming.length} upcoming expense occurrences`);
     
     // Sort by date
     return upcoming.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
