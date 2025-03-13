@@ -242,24 +242,47 @@ export default function FutureForecasting() {
       return [];
     }
     
+    // Count how many transactions we process successfully
+    let processedCount = 0;
+    let skippedCount = 0;
+    
     transactions.forEach(transaction => {
-      if (!transaction.date) {
-        console.warn("Transaction missing date:", transaction.id);
-        return;
-      }
-      
-      const month = transaction.date.substring(0, 7); // YYYY-MM format
-      
-      if (!monthlyTransactions[month]) {
-        monthlyTransactions[month] = { income: 0, expenses: 0 };
-      }
-      
-      if (transaction.type === 'income') {
-        monthlyTransactions[month].income += Number(transaction.amount);
-      } else if (transaction.type === 'expense') {
-        monthlyTransactions[month].expenses += Number(transaction.amount);
+      try {
+        if (!transaction.date) {
+          console.warn("Transaction missing date:", transaction.id);
+          skippedCount++;
+          return;
+        }
+        
+        if (typeof transaction.amount !== 'number' && isNaN(Number(transaction.amount))) {
+          console.warn("Transaction has invalid amount:", transaction.id, transaction.amount);
+          skippedCount++;
+          return;
+        }
+        
+        const month = transaction.date.substring(0, 7); // YYYY-MM format
+        
+        if (!monthlyTransactions[month]) {
+          monthlyTransactions[month] = { income: 0, expenses: 0 };
+        }
+        
+        if (transaction.type === 'income') {
+          monthlyTransactions[month].income += Number(transaction.amount);
+          processedCount++;
+        } else if (transaction.type === 'expense') {
+          monthlyTransactions[month].expenses += Number(transaction.amount);
+          processedCount++;
+        } else {
+          // Skip transfers or other types
+          skippedCount++;
+        }
+      } catch (err) {
+        console.error("Error processing transaction for monthly data:", err, transaction);
+        skippedCount++;
       }
     });
+    
+    console.log(`Monthly data: processed ${processedCount} transactions, skipped ${skippedCount}`);
     
     // Sort months and get the last 6
     const sortedMonths = Object.keys(monthlyTransactions).sort();
@@ -267,6 +290,28 @@ export default function FutureForecasting() {
     if (sortedMonths.length === 0) {
       console.warn("No monthly data available after processing transactions");
       return [];
+    }
+    
+    // We need at least 2 months of data to calculate trends
+    if (sortedMonths.length < 2) {
+      console.warn("Not enough monthly data to calculate trends");
+      // Return what we have without forecasting
+      return sortedMonths.map(month => {
+        const { income, expenses } = monthlyTransactions[month];
+        const savings = income - expenses;
+        
+        // Format month for display (e.g., "Jan 2023")
+        const date = new Date(month + "-01");
+        const formattedMonth = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        
+        return {
+          month: formattedMonth,
+          income,
+          expenses,
+          savings,
+          prediction: false
+        };
+      });
     }
     
     const recentMonths = sortedMonths.slice(-6);
@@ -300,6 +345,8 @@ export default function FutureForecasting() {
     const avgIncomeChange = changeCount > 0 ? incomeChangeSum / changeCount : 0;
     const avgExpenseChange = changeCount > 0 ? expenseChangeSum / changeCount : 0;
     
+    console.log(`Average monthly changes: income ${(avgIncomeChange * 100).toFixed(2)}%, expenses ${(avgExpenseChange * 100).toFixed(2)}%`);
+    
     // Create historical data
     const historicalData: MonthlyData[] = recentMonths.map(month => {
       const { income, expenses } = monthlyTransactions[month];
@@ -322,32 +369,41 @@ export default function FutureForecasting() {
     const forecastData: MonthlyData[] = [];
     const numForecastMonths = getForecastMonthsCount();
     
-    let lastIncome = historicalData[historicalData.length - 1].income;
-    let lastExpenses = historicalData[historicalData.length - 1].expenses;
-    
-    for (let i = 1; i <= numForecastMonths; i++) {
-      // Calculate next month date
-      const lastDate = new Date(recentMonths[recentMonths.length - 1] + "-01");
-      lastDate.setMonth(lastDate.getMonth() + i);
-      const nextMonth = lastDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    // Only forecast if we have enough historical data
+    if (historicalData.length > 0) {
+      let lastIncome = historicalData[historicalData.length - 1].income;
+      let lastExpenses = historicalData[historicalData.length - 1].expenses;
       
-      // Apply trend to forecast
-      const forecastIncome = Math.round(lastIncome * (1 + avgIncomeChange));
-      const forecastExpenses = Math.round(lastExpenses * (1 + avgExpenseChange));
-      const forecastSavings = forecastIncome - forecastExpenses;
-      
-      forecastData.push({
-        month: nextMonth,
-        income: forecastIncome,
-        expenses: forecastExpenses,
-        savings: forecastSavings,
-        prediction: true
-      });
-      
-      // Update for next iteration
-      lastIncome = forecastIncome;
-      lastExpenses = forecastExpenses;
+      for (let i = 1; i <= numForecastMonths; i++) {
+        try {
+          // Calculate next month date
+          const lastDate = new Date(recentMonths[recentMonths.length - 1] + "-01");
+          lastDate.setMonth(lastDate.getMonth() + i);
+          const nextMonth = lastDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+          
+          // Apply trend to forecast
+          const forecastIncome = Math.round(lastIncome * (1 + avgIncomeChange));
+          const forecastExpenses = Math.round(lastExpenses * (1 + avgExpenseChange));
+          const forecastSavings = forecastIncome - forecastExpenses;
+          
+          forecastData.push({
+            month: nextMonth,
+            income: forecastIncome,
+            expenses: forecastExpenses,
+            savings: forecastSavings,
+            prediction: true
+          });
+          
+          // Update for next iteration
+          lastIncome = forecastIncome;
+          lastExpenses = forecastExpenses;
+        } catch (err) {
+          console.error("Error generating forecast for month:", err);
+        }
+      }
     }
+    
+    console.log(`Generated ${historicalData.length} historical data points and ${forecastData.length} forecast data points`);
     
     return [...historicalData, ...forecastData];
   };
