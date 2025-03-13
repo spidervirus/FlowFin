@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { logger } from '@/lib/logger'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
@@ -64,3 +65,57 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|public|api).*)',
   ],
 }
+
+export async function apiMiddleware(request: NextRequest) {
+  const requestStart = Date.now();
+  
+  try {
+    // Log incoming request
+    logger.info('Incoming request', {
+      method: request.method,
+      url: request.url,
+      headers: Object.fromEntries(request.headers)
+    });
+
+    // Add request ID for tracking
+    const requestId = crypto.randomUUID();
+    const headers = new Headers(request.headers);
+    headers.set('x-request-id', requestId);
+
+    // Continue to the API route
+    const response = NextResponse.next({
+      request: {
+        headers
+      }
+    });
+
+    // Log response time
+    const duration = Date.now() - requestStart;
+    logger.info('Request completed', {
+      requestId,
+      duration,
+      status: response.status
+    });
+
+    return response;
+  } catch (error) {
+    // Log error
+    logger.error('Middleware error', error instanceof Error ? error : new Error('Unknown error'));
+
+    // Return error response
+    return NextResponse.json(
+      {
+        error: {
+          message: 'An unexpected error occurred',
+          code: 'INTERNAL_ERROR'
+        }
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// Configure which routes to run middleware on
+export const apiConfig = {
+  matcher: '/api/:path*'
+};
