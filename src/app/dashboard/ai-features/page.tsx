@@ -1,11 +1,11 @@
 import DashboardNavbar from "@/components/dashboard-navbar";
-import { Button } from "@/components/ui/button";
-import { Brain, Sparkles } from "lucide-react";
+import SpendingInsights from "@/components/ai-features/spending-insights";
+import ReceiptScanner from "@/components/ai-features/receipt-scanner";
 import { redirect } from "next/navigation";
 import { createClient } from "../../../../supabase/server";
-import AIDataEntry from "@/components/ai-features/ai-data-entry";
-import PredictiveAnalytics from "@/components/ai-features/predictive-analytics";
-import SmartCategorization from "@/components/ai-features/smart-categorization";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Lightbulb, TrendingUp, Sparkles, Receipt } from "lucide-react";
 
 export default async function AIFeaturesPage() {
   const supabase = await createClient();
@@ -26,124 +26,137 @@ export default async function AIFeaturesPage() {
           {/* Header Section */}
           <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold">AI-Powered Features</h1>
+              <h1 className="text-3xl font-bold">AI Features</h1>
               <p className="text-muted-foreground">
-                Leverage artificial intelligence to streamline your accounting
-                workflow
+                Intelligent insights and recommendations for your finances
               </p>
             </div>
-            <Button className="gap-2">
-              <Sparkles className="h-4 w-4" />
-              Upgrade to Pro
-            </Button>
           </header>
 
           {/* AI Features Overview */}
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-100 rounded-xl p-6">
-            <div className="flex flex-col md:flex-row gap-6 items-center">
-              <div className="h-16 w-16 rounded-full bg-purple-100 flex items-center justify-center">
-                <Brain className="h-8 w-8 text-purple-600" />
-              </div>
-              <div className="flex-1 text-center md:text-left">
-                <h2 className="text-xl font-bold text-purple-900 mb-2">
-                  AI-Powered Accounting Assistant
-                </h2>
-                <p className="text-purple-800 max-w-3xl">
-                  Our AI features help you save time, reduce errors, and gain
-                  deeper insights into your financial data. From automated data
-                  entry to predictive analytics and smart categorization, our AI
-                  tools are designed to make accounting easier and more
-                  efficient.
-                </p>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-blue-100">
+                    <TrendingUp className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <CardTitle className="text-lg">Spending Insights</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-sm">
+                  Analyze your spending patterns and get personalized recommendations to optimize your budget.
+                </CardDescription>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-amber-100">
+                    <Lightbulb className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <CardTitle className="text-lg">Smart Budgeting</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-sm">
+                  Get AI-powered budget suggestions based on your income, expenses, and financial goals.
+                </CardDescription>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-purple-100">
+                    <Sparkles className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <CardTitle className="text-lg">Future Forecasting</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-sm">
+                  Predict future expenses and income based on your historical financial data.
+                </CardDescription>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-green-100">
+                    <Receipt className="h-5 w-5 text-green-600" />
+                  </div>
+                  <CardTitle className="text-lg">Receipt Scanner</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-sm">
+                  Upload receipt images to automatically extract and create transactions with AI.
+                </CardDescription>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* AI Data Entry */}
-          <section className="space-y-2">
-            <h2 className="text-2xl font-bold">Automated Data Entry</h2>
-            <p className="text-muted-foreground mb-4">
-              Extract transaction data automatically from receipts, invoices,
-              and bank statements
-            </p>
-            <AIDataEntry />
-          </section>
-
-          {/* Predictive Analytics */}
-          <section className="space-y-2">
-            <h2 className="text-2xl font-bold">Predictive Analytics</h2>
-            <p className="text-muted-foreground mb-4">
-              Forecast future financial trends and detect anomalies in your
-              transactions
-            </p>
-            <PredictiveAnalytics />
-          </section>
-
-          {/* Smart Categorization */}
-          <section className="space-y-2">
-            <h2 className="text-2xl font-bold">Smart Categorization</h2>
-            <p className="text-muted-foreground mb-4">
-              Automatically categorize transactions with machine learning that
-              improves over time
-            </p>
-            <SmartCategorization />
-          </section>
-
-          {/* AI Benefits */}
-          <section className="mt-8">
-            <h2 className="text-2xl font-bold mb-6">
-              Benefits of AI-Powered Accounting
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[
-                {
-                  title: "Save Time",
-                  description:
-                    "Reduce manual data entry by up to 80% with automated extraction and categorization",
-                  icon: "⏱️",
-                },
-                {
-                  title: "Reduce Errors",
-                  description:
-                    "AI validation helps catch mistakes and inconsistencies before they impact your books",
-                  icon: "✓",
-                },
-                {
-                  title: "Better Insights",
-                  description:
-                    "Predictive analytics help you anticipate cash flow needs and identify spending patterns",
-                  icon: "📊",
-                },
-                {
-                  title: "Simplified Tax Prep",
-                  description:
-                    "Smart categorization ensures transactions are properly classified for tax purposes",
-                  icon: "📝",
-                },
-                {
-                  title: "Continuous Learning",
-                  description:
-                    "Our AI improves over time as it learns from your corrections and preferences",
-                  icon: "🧠",
-                },
-                {
-                  title: "Seamless Integration",
-                  description:
-                    "Works with your existing accounting workflow without disrupting your processes",
-                  icon: "🔄",
-                },
-              ].map((benefit, index) => (
-                <div
-                  key={index}
-                  className="bg-white rounded-xl border p-6 hover:shadow-md transition-shadow"
-                >
-                  <div className="text-3xl mb-4">{benefit.icon}</div>
-                  <h3 className="text-lg font-bold mb-2">{benefit.title}</h3>
-                  <p className="text-muted-foreground">{benefit.description}</p>
-                </div>
-              ))}
-            </div>
-          </section>
+          {/* Main Content */}
+          <Tabs defaultValue="spending-insights" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="spending-insights">Spending Insights</TabsTrigger>
+              <TabsTrigger value="smart-budgeting">Smart Budgeting</TabsTrigger>
+              <TabsTrigger value="future-forecasting">Future Forecasting</TabsTrigger>
+              <TabsTrigger value="receipt-scanner">Receipt Scanner</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="spending-insights">
+              <SpendingInsights />
+            </TabsContent>
+            
+            <TabsContent value="smart-budgeting">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Smart Budgeting</CardTitle>
+                  <CardDescription>
+                    AI-powered budget recommendations
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <Lightbulb className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">Coming Soon</h3>
+                    <p className="text-muted-foreground max-w-md">
+                      We're working on intelligent budget recommendations based on your spending patterns and financial goals.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="future-forecasting">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Future Forecasting</CardTitle>
+                  <CardDescription>
+                    Predict your future financial situation
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <Sparkles className="h-12 w-12 text-purple-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">Coming Soon</h3>
+                    <p className="text-muted-foreground max-w-md">
+                      We're developing advanced forecasting models to help you predict and plan for your financial future.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="receipt-scanner">
+              <ReceiptScanner />
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
     </>
