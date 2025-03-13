@@ -9,16 +9,23 @@ export const createClient = async () => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll().map(({ name, value }) => ({
-            name,
-            value,
-          }));
+        get(name) {
+          return cookieStore.get(name)?.value;
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
+        set(name, value, options) {
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            // Handle the error or just log it
+            console.error("Cookie setting error:", error);
+          }
+        },
+        remove(name, options) {
+          try {
+            cookieStore.set({ name, value: "", ...options });
+          } catch (error) {
+            console.error("Cookie removal error:", error);
+          }
         },
       },
     }

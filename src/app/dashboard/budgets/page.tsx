@@ -29,14 +29,7 @@ export default async function BudgetsPage() {
   // Get active budgets for current month
   const { data: budgets, error } = await supabase
     .from("budgets")
-    .select(`
-      *,
-      budget_categories(
-        id,
-        amount,
-        category:categories(id, name, type, color)
-      )
-    `)
+    .select("*")
     .eq("user_id", user.id)
     .eq("is_active", true)
     .lte("start_date", currentDate)
@@ -47,8 +40,33 @@ export default async function BudgetsPage() {
     console.error("Error fetching budgets:", error);
   }
 
+  // Get budget categories separately
+  if (budgets && budgets.length > 0) {
+    const budgetIds = budgets.map((budget) => budget.id);
+    const { data: categoriesData, error: categoriesError } = await supabase
+      .from("budget_categories")
+      .select(`
+        id,
+        budget_id,
+        amount,
+        category:categories(id, name, type, color)
+      `)
+      .in("budget_id", budgetIds);
+
+    if (categoriesError) {
+      console.error("Error fetching budget categories:", categoriesError);
+    } else if (categoriesData) {
+      // Add categories to each budget
+      budgets.forEach((budget) => {
+        budget.budget_categories = categoriesData.filter(
+          (item) => item.budget_id === budget.id
+        );
+      });
+    }
+  }
+
   // Get budget tracking data for current month
-  let tracking = [];
+  let tracking: any[] = [];
   if (budgets && budgets.length > 0) {
     const budgetIds = budgets.map((budget) => budget.id);
     const { data: trackingData, error: trackingError } = await supabase
@@ -62,7 +80,7 @@ export default async function BudgetsPage() {
 
     if (trackingError) {
       console.error("Error fetching budget tracking:", trackingError);
-    } else {
+    } else if (trackingData) {
       tracking = trackingData;
       
       // Add tracking data to each budget
@@ -98,7 +116,7 @@ export default async function BudgetsPage() {
 
           {/* Budget Overview */}
           <section className="grid grid-cols-1 gap-6">
-            <BudgetOverview budgets={budgets || []} tracking={tracking || []} />
+            <BudgetOverview budgets={budgets || []} tracking={tracking} />
           </section>
 
           {/* Budget List */}
