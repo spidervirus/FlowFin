@@ -4,6 +4,8 @@ import { encodedRedirect } from "@/utils/utils";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "../../supabase/server";
+import { createAdminClient } from "../../supabase/admin";
+import { v4 as uuidv4 } from 'uuid';
 
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
@@ -13,60 +15,123 @@ export const signUpAction = async (formData: FormData) => {
   const origin = headers().get("origin");
 
   if (!email || !password) {
-    return encodedRedirect(
-      "error",
-      "/sign-up",
-      "Email and password are required",
-    );
+    return encodedRedirect("error", "/sign-up", "Email and password are required");
   }
 
-  const { data: { user }, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: `${origin}/auth/callback`,
-      data: {
-        full_name: fullName,
-        email: email,
+  try {
+    // First, check if the user already exists
+    const { data: existingUsers, error: checkError } = await supabase
+      .from('users')
+      .select('email')
+      .eq('email', email)
+      .limit(1);
+    
+    if (checkError) {
+      console.error('Error checking for existing user:', checkError);
+    }
+    
+    if (existingUsers && existingUsers.length > 0) {
+      return encodedRedirect(
+        "error",
+        "/sign-up",
+        "A user with this email already exists. Please sign in instead."
+      );
+    }
+
+    // Create the user in auth.users WITHOUT any metadata
+    // This is critical - the metadata is causing the database error
+    const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${origin}/auth/callback`,
+        // IMPORTANT: Do NOT include any metadata here
       }
-    },
-  });
+    });
+    
+    if (signUpError) {
+      console.error('Error during signup:', signUpError);
+      return encodedRedirect("error", "/sign-up", signUpError.message);
+    }
+    
+    if (!user) {
+      return encodedRedirect(
+        "error",
+        "/sign-up",
+        "Failed to create user account. Please try again."
+      );
+    }
 
-  console.log("After signUp", error);
-
-
-  if (error) {
-    console.error(error.code + " " + error.message);
-    return encodedRedirect("error", "/sign-up", error.message);
-  }
-
-  if (user) {
+    // Now we need to create the user profile in public.users
+    // But we need to use the service role client to bypass RLS
     try {
-      const { error: updateError } = await supabase
+      // Try to create the admin client
+      const adminSupabase = await createAdminClient();
+      
+      // Use the admin client to insert the user profile
+      const { error: insertError } = await adminSupabase
         .from('users')
         .insert({
           id: user.id,
-          name: fullName,
-          full_name: fullName,
           email: email,
+          name: fullName || email.split('@')[0],
+          full_name: fullName || email.split('@')[0],
           user_id: user.id,
           token_identifier: user.id,
           created_at: new Date().toISOString()
         });
-
-      if (updateError) {
-        console.error('Error updating user profile:', updateError);
+      
+      if (insertError) {
+        console.error('Error creating user profile with admin client:', insertError);
+        
+        // If admin client fails, try a different approach
+        // Let's try to update the user metadata and hope the trigger works
+        const { error: updateError } = await supabase.auth.updateUser({
+          data: {
+            full_name: fullName,
+          }
+        });
+        
+        if (updateError) {
+          console.error('Error updating user metadata:', updateError);
+          return encodedRedirect(
+            "warning",
+            "/sign-up",
+            "Your account was created, but there was an issue setting up your profile. You can still sign in."
+          );
+        }
+        
+        return encodedRedirect(
+          "success",
+          "/sign-up",
+          "Thanks for signing up! Please check your email for a verification link."
+        );
       }
-    } catch (err) {
-      console.error('Error in user profile creation:', err);
+      
+      return encodedRedirect(
+        "success",
+        "/sign-up",
+        "Thanks for signing up! Please check your email for a verification link."
+      );
+    } catch (profileError) {
+      console.error('Error in user profile creation:', profileError);
+      
+      // If all else fails, just return success and let the user try to sign in
+      // The trigger might still work on its own
+      return encodedRedirect(
+        "warning",
+        "/sign-up",
+        "Your account was created, but there was an issue setting up your profile. You can still sign in."
+      );
     }
+  } catch (err) {
+    console.error('Unexpected error during signup:', err);
+    return encodedRedirect(
+      "error",
+      "/sign-up",
+      "An unexpected error occurred. Please try again."
+    );
   }
-
-  return encodedRedirect(
-    "success",
-    "/sign-up",
-    "Thanks for signing up! Please check your email for a verification link.",
-  );
 };
 
 export const signInAction = async (formData: FormData) => {

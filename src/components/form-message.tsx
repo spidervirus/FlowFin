@@ -1,6 +1,7 @@
 export type Message =
   | { success: string }
   | { error: string }
+  | { warning: string }
   | { message: string };
 
 export function FormMessage({ message }: { message: Message }) {
@@ -14,6 +15,11 @@ export function FormMessage({ message }: { message: Message }) {
       {"error" in message && (
         <div className="text-red-500 border-l-2 px-4">
           {message.error}
+        </div>
+      )}
+      {"warning" in message && (
+        <div className="text-amber-500 border-l-2 px-4">
+          {message.warning}
         </div>
       )}
       {"message" in message && (

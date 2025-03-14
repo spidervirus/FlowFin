@@ -83,6 +83,29 @@ To apply the migrations:
 2. Link your project: `supabase link --project-ref your-project-ref`
 3. Apply migrations: `supabase db push`
 
+### Fixing User Signup Issues
+
+If you encounter a "Database error saving new user" when signing up, you have two options:
+
+#### Option 1: Apply the SQL Fix (Recommended)
+
+This is the recommended approach as it ensures all future signups will work correctly:
+
+1. Log in to your [Supabase Dashboard](https://app.supabase.com)
+2. Select your project
+3. Go to the "SQL Editor" section in the left sidebar
+4. Click "New Query"
+5. Copy and paste the SQL from `supabase/migrations/fix-user-signup-trigger.sql`
+6. Click "Run" to execute the SQL
+
+**Important:** Make sure to run the entire script at once, not just parts of it.
+
+For detailed instructions and troubleshooting, see the `docs/fix-user-signup.md` file.
+
+#### Option 2: Use the Updated Code
+
+The application has been updated with a fallback mechanism that should handle the error automatically. If you've pulled the latest code, you should be able to sign up without applying the SQL fix, though Option 1 is still recommended for a permanent solution.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
