@@ -58,6 +58,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react-swc": "^3.5.0",
     "postcss": "^8",
     "tailwind-merge": "^2",
     "tailwindcss": "^3",
