@@ -37,7 +37,7 @@ export default async function SettingsPage() {
           </header>
 
           {/* Settings Tabs */}
-          <Tabs defaultValue="profile" className="w-full">
+          <Tabs defaultValue="organization" className="w-full">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-8">
               <TabsTrigger value="profile" className="flex items-center gap-2">
                 <User className="h-4 w-4" />
@@ -69,7 +69,7 @@ export default async function SettingsPage() {
             </TabsContent>
 
             <TabsContent value="organization" className="space-y-6">
-              <OrganizationSettings />
+              <OrganizationSettings initialUser={user} />
             </TabsContent>
 
             {isAdmin && (

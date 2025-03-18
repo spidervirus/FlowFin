@@ -118,7 +118,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Redirect to the invoices page
-    return NextResponse.redirect(new URL(`/dashboard/invoices`, request.url));
+    const redirectUrl = new URL('/dashboard/invoices', request.url).toString();
+    return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error("Error processing request:", error);
     return NextResponse.json(

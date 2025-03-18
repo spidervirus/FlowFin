@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS categories (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   is_default BOOLEAN NOT NULL DEFAULT false,
-  UNIQUE(name, user_id, parent_id)
+  UNIQUE(name, user_id)
 );
 
 -- Create transactions table
@@ -93,27 +93,27 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create triggers for updated_at timestamps
-CREATE TRIGGER update_accounts_modtime
+CREATE OR REPLACE TRIGGER update_accounts_modtime
 BEFORE UPDATE ON accounts
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
-CREATE TRIGGER update_categories_modtime
+CREATE OR REPLACE TRIGGER update_categories_modtime
 BEFORE UPDATE ON categories
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
-CREATE TRIGGER update_transactions_modtime
+CREATE OR REPLACE TRIGGER update_transactions_modtime
 BEFORE UPDATE ON transactions
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
-CREATE TRIGGER update_reconciliations_modtime
+CREATE OR REPLACE TRIGGER update_reconciliations_modtime
 BEFORE UPDATE ON reconciliations
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
-CREATE TRIGGER update_reconciliation_items_modtime
+CREATE OR REPLACE TRIGGER update_reconciliation_items_modtime
 BEFORE UPDATE ON reconciliation_items
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
-CREATE TRIGGER update_report_configurations_modtime
+CREATE OR REPLACE TRIGGER update_report_configurations_modtime
 BEFORE UPDATE ON report_configurations
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
@@ -123,31 +123,33 @@ CREATE OR REPLACE FUNCTION create_default_categories_for_user()
 RETURNS TRIGGER AS $$
 BEGIN
   -- Income categories
-  INSERT INTO categories (name, type, user_id, is_default) VALUES
-  ('Salary', 'income', NEW.id, true),
-  ('Freelance', 'income', NEW.id, true),
-  ('Investments', 'income', NEW.id, true),
-  ('Gifts', 'income', NEW.id, true),
-  ('Other Income', 'income', NEW.id, true),
+  INSERT INTO categories (name, type, user_id, is_default, color) VALUES
+  ('Salary', 'income', NEW.id, true, '#4CAF50'),
+  ('Investments', 'income', NEW.id, true, '#2196F3'),
+  ('Sales', 'income', NEW.id, true, '#9C27B0'),
+  ('Other Income', 'income', NEW.id, true, '#607D8B'),
   
   -- Expense categories
-  ('Housing', 'expense', NEW.id, true),
-  ('Transportation', 'expense', NEW.id, true),
-  ('Food', 'expense', NEW.id, true),
-  ('Utilities', 'expense', NEW.id, true),
-  ('Insurance', 'expense', NEW.id, true),
-  ('Medical', 'expense', NEW.id, true),
-  ('Entertainment', 'expense', NEW.id, true),
-  ('Education', 'expense', NEW.id, true),
-  ('Subscriptions', 'expense', NEW.id, true),
-  ('Other Expenses', 'expense', NEW.id, true);
+  ('Housing', 'expense', NEW.id, true, '#F44336'),
+  ('Transportation', 'expense', NEW.id, true, '#FF9800'),
+  ('Food', 'expense', NEW.id, true, '#795548'),
+  ('Utilities', 'expense', NEW.id, true, '#009688'),
+  ('Insurance', 'expense', NEW.id, true, '#3F51B5'),
+  ('Medical', 'expense', NEW.id, true, '#E91E63'),
+  ('Entertainment', 'expense', NEW.id, true, '#673AB7'),
+  ('Education', 'expense', NEW.id, true, '#00BCD4'),
+  ('Office Supplies', 'expense', NEW.id, true, '#8BC34A'),
+  ('Marketing', 'expense', NEW.id, true, '#FF5722'),
+  ('Software', 'expense', NEW.id, true, '#03A9F4'),
+  ('Other Expenses', 'expense', NEW.id, true, '#9E9E9E')
+  ON CONFLICT (name, user_id) DO NOTHING;
   
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Create trigger to create default categories for new users
-CREATE TRIGGER create_default_categories_for_new_user
+CREATE OR REPLACE TRIGGER create_default_categories_for_new_user
 AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE FUNCTION create_default_categories_for_user();
 
@@ -158,6 +160,37 @@ ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reconciliations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reconciliation_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE report_configurations ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies first
+DROP POLICY IF EXISTS "Users can view their own accounts" ON accounts;
+DROP POLICY IF EXISTS "Users can insert their own accounts" ON accounts;
+DROP POLICY IF EXISTS "Users can update their own accounts" ON accounts;
+DROP POLICY IF EXISTS "Users can delete their own accounts" ON accounts;
+
+DROP POLICY IF EXISTS "Users can view their own categories" ON categories;
+DROP POLICY IF EXISTS "Users can insert their own categories" ON categories;
+DROP POLICY IF EXISTS "Users can update their own categories" ON categories;
+DROP POLICY IF EXISTS "Users can delete their own categories" ON categories;
+
+DROP POLICY IF EXISTS "Users can view their own transactions" ON transactions;
+DROP POLICY IF EXISTS "Users can insert their own transactions" ON transactions;
+DROP POLICY IF EXISTS "Users can update their own transactions" ON transactions;
+DROP POLICY IF EXISTS "Users can delete their own transactions" ON transactions;
+
+DROP POLICY IF EXISTS "Users can view their own reconciliations" ON reconciliations;
+DROP POLICY IF EXISTS "Users can insert their own reconciliations" ON reconciliations;
+DROP POLICY IF EXISTS "Users can update their own reconciliations" ON reconciliations;
+DROP POLICY IF EXISTS "Users can delete their own reconciliations" ON reconciliations;
+
+DROP POLICY IF EXISTS "Users can view their own reconciliation items" ON reconciliation_items;
+DROP POLICY IF EXISTS "Users can insert their own reconciliation items" ON reconciliation_items;
+DROP POLICY IF EXISTS "Users can update their own reconciliation items" ON reconciliation_items;
+DROP POLICY IF EXISTS "Users can delete their own reconciliation items" ON reconciliation_items;
+
+DROP POLICY IF EXISTS "Users can view their own report configurations" ON report_configurations;
+DROP POLICY IF EXISTS "Users can insert their own report configurations" ON report_configurations;
+DROP POLICY IF EXISTS "Users can update their own report configurations" ON report_configurations;
+DROP POLICY IF EXISTS "Users can delete their own report configurations" ON report_configurations;
 
 -- Create policies
 -- Accounts policies
@@ -287,9 +320,59 @@ ON report_configurations FOR DELETE
 USING (auth.uid() = user_id);
 
 -- Enable realtime for these tables
-ALTER PUBLICATION supabase_realtime ADD TABLE accounts;
-ALTER PUBLICATION supabase_realtime ADD TABLE categories;
-ALTER PUBLICATION supabase_realtime ADD TABLE transactions;
-ALTER PUBLICATION supabase_realtime ADD TABLE reconciliations;
-ALTER PUBLICATION supabase_realtime ADD TABLE reconciliation_items;
-ALTER PUBLICATION supabase_realtime ADD TABLE report_configurations;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = current_schema()
+        AND tablename = 'accounts'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE accounts;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = current_schema()
+        AND tablename = 'categories'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE categories;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = current_schema()
+        AND tablename = 'transactions'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE transactions;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = current_schema()
+        AND tablename = 'reconciliations'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE reconciliations;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = current_schema()
+        AND tablename = 'reconciliation_items'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE reconciliation_items;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = current_schema()
+        AND tablename = 'report_configurations'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE report_configurations;
+    END IF;
+END$$;

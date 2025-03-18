@@ -5,6 +5,8 @@ import Script from "next/script";
 import { TempoInit } from "@/components/tempo-init";
 import { ThemeProvider } from "@/components/theme-provider";
 import QuickActionsPanel from "@/components/quick-actions-panel";
+import { AuthProvider } from "@/lib/auth/auth-context";
+import { Toaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -29,8 +31,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
-          <QuickActionsPanel />
+          <AuthProvider>
+            {children}
+            <QuickActionsPanel />
+            <Toaster position="top-right" closeButton richColors />
+          </AuthProvider>
         </ThemeProvider>
         <TempoInit />
       </body>

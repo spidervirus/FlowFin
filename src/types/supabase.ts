@@ -1,3 +1,5 @@
+import { CurrencyCode } from '@/lib/utils';
+
 export type Json =
   | string
   | number
@@ -6,68 +8,235 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type Database = {
+export interface Database {
   public: {
     Tables: {
       users: {
         Row: {
-          avatar_url: string | null
-          created_at: string
-          credits: string | null
-          email: string | null
-          full_name: string | null
-          id: string
-          image: string | null
-          name: string | null
-          subscription: string | null
-          token_identifier: string
-          updated_at: string | null
-          user_id: string | null
-        }
+          id: string;
+          created_at: string;
+          email: string | null;
+          full_name: string | null;
+          avatar_url: string | null;
+          user_id: string | null;
+          image: string | null;
+          credits: string | null;
+        };
         Insert: {
-          avatar_url?: string | null
-          created_at?: string
-          credits?: string | null
-          email?: string | null
-          full_name?: string | null
-          id: string
-          image?: string | null
-          name?: string | null
-          subscription?: string | null
-          token_identifier: string
-          updated_at?: string | null
-          user_id?: string | null
-        }
+          id?: string;
+          created_at?: string;
+          email?: string | null;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          user_id?: string | null;
+          image?: string | null;
+          credits?: string | null;
+        };
         Update: {
-          avatar_url?: string | null
-          created_at?: string
-          credits?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          image?: string | null
-          name?: string | null
-          subscription?: string | null
-          token_identifier?: string
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      [_ in never]: never
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
+          id?: string;
+          created_at?: string;
+          email?: string | null;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          user_id?: string | null;
+          image?: string | null;
+          credits?: string | null;
+        };
+        Relationships: [];
+      };
+      company_settings: {
+        Row: {
+          id: string;
+          created_at: string;
+          user_id: string;
+          company_name: string;
+          address: string;
+          country: string;
+          default_currency: CurrencyCode;
+          fiscal_year_start: string;
+          industry: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          user_id: string;
+          company_name: string;
+          address: string;
+          country: string;
+          default_currency: CurrencyCode;
+          fiscal_year_start: string;
+          industry: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          user_id?: string;
+          company_name?: string;
+          address?: string;
+          country?: string;
+          default_currency?: CurrencyCode;
+          fiscal_year_start?: string;
+          industry?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "company_settings_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      categories: {
+        Row: {
+          id: string;
+          created_at: string;
+          user_id: string;
+          name: string;
+          type: string;
+          color: string;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          user_id: string;
+          name: string;
+          type: string;
+          color: string;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          user_id?: string;
+          name?: string;
+          type?: string;
+          color?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "categories_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      transactions: {
+        Row: {
+          id: string;
+          created_at: string;
+          user_id: string;
+          date: string;
+          description: string;
+          amount: number;
+          type: string;
+          category_id: string;
+          status: string;
+          payment_date: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          user_id: string;
+          date: string;
+          description: string;
+          amount: number;
+          type: string;
+          category_id: string;
+          status?: string;
+          payment_date?: string | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          user_id?: string;
+          date?: string;
+          description?: string;
+          amount?: number;
+          type?: string;
+          category_id?: string;
+          status?: string;
+          payment_date?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "transactions_category_id_fkey";
+            columns: ["category_id"];
+            referencedRelation: "categories";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transactions_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      recurring_transactions: {
+        Row: {
+          id: string;
+          created_at: string;
+          user_id: string;
+          description: string;
+          amount: number;
+          type: string;
+          category_id: string;
+          frequency: string;
+          start_date: string;
+          end_date: string | null;
+          is_active: boolean;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          user_id: string;
+          description: string;
+          amount: number;
+          type: string;
+          category_id: string;
+          frequency: string;
+          start_date: string;
+          end_date?: string | null;
+          is_active?: boolean;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          user_id?: string;
+          description?: string;
+          amount?: number;
+          type?: string;
+          category_id?: string;
+          frequency?: string;
+          start_date?: string;
+          end_date?: string | null;
+          is_active?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recurring_transactions_category_id_fkey";
+            columns: ["category_id"];
+            referencedRelation: "categories";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "recurring_transactions_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+    };
+    Views: {};
+    Functions: {};
+    Enums: {};
+    CompositeTypes: {};
+  };
 }
 
 type PublicSchema = Database[Extract<keyof Database, "public">]

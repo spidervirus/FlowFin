@@ -25,11 +25,27 @@ export async function POST(request: NextRequest) {
     const institution = (formData.get("institution") as string) || null;
     const account_number = (formData.get("account_number") as string) || null;
     const notes = (formData.get("notes") as string) || null;
-
+    
+    // Get user_id from form data or from authenticated user
+    let userId = (formData.get("user_id") as string) || null;
+    
+    // If no user_id in form data, use the authenticated user
+    if (!userId && user) {
+      userId = user.id;
+    }
+    
     // Validate required fields
     if (!name || !type || isNaN(balance)) {
       return NextResponse.json(
         { error: "Name, type, and balance are required" },
+        { status: 400 },
+      );
+    }
+    
+    // Validate user_id
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID is required" },
         { status: 400 },
       );
     }
@@ -46,7 +62,7 @@ export async function POST(request: NextRequest) {
           institution,
           account_number,
           notes,
-          user_id: user.id,
+          user_id: userId,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
@@ -63,9 +79,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Redirect to the account detail page
-    return NextResponse.redirect(
-      new URL(`/dashboard/accounts/${data.id}`, request.url),
-    );
+    const redirectUrl = new URL('/dashboard/accounts', request.url).toString();
+    return NextResponse.redirect(redirectUrl, { status: 303 });
   } catch (error) {
     console.error("Error processing request:", error);
     return NextResponse.json(

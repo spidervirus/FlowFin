@@ -1,11 +1,13 @@
 import DashboardNavbar from "@/components/dashboard-navbar";
 import { redirect } from "next/navigation";
-import { createClient } from "../../../../supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import GoalsList from "@/components/goal-components/goals-list";
 import GoalsOverview from "@/components/goal-components/goals-overview";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { CurrencyCode } from "@/lib/utils";
+import { createSupabaseClient } from '@/lib/supabase-client';
 
 export default async function GoalsPage() {
   const supabase = await createClient();
@@ -18,20 +20,38 @@ export default async function GoalsPage() {
     return redirect("/sign-in");
   }
 
-  // Get active goals
-  const { data: goals, error } = await supabase
-    .from("financial_goals")
-    .select(`
-      *,
-      category:categories(*),
-      contributions:goal_contributions(*)
-    `)
-    .eq("user_id", user.id)
-    .eq("is_active", true)
-    .order("target_date", { ascending: true });
+  // Get company settings
+  const supabaseClient = createSupabaseClient();
+  const { data: settings } = await supabaseClient
+    .from('company_settings')
+    .select('*')
+    .single();
 
-  if (error) {
-    console.error("Error fetching goals:", error);
+  // Use default currency if settings don't exist
+  const currency = settings?.default_currency as CurrencyCode || 'USD';
+
+  // Initialize empty array for goals
+  let goals: any[] = [];
+
+  // Only fetch goals if company settings exist
+  if (settings) {
+    // Get active goals
+    const { data: goalsData, error } = await supabase
+      .from("financial_goals")
+      .select(`
+        *,
+        category:categories(*),
+        contributions:goal_contributions(*)
+      `)
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .order("target_date", { ascending: true });
+
+    if (error) {
+      console.error("Error fetching goals:", error);
+    } else if (goalsData) {
+      goals = goalsData;
+    }
   }
 
   return (
@@ -58,12 +78,12 @@ export default async function GoalsPage() {
 
           {/* Goals Overview */}
           <section className="grid grid-cols-1 gap-6">
-            <GoalsOverview goals={goals || []} />
+            <GoalsOverview goals={goals || []} currency={currency} />
           </section>
 
           {/* Goals List */}
           <section className="grid grid-cols-1 gap-6">
-            <GoalsList goals={goals || []} />
+            <GoalsList goals={goals || []} currency={currency} />
           </section>
         </div>
       </main>

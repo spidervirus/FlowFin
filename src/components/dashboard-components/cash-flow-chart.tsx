@@ -8,7 +8,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
+import { CurrencyCode, CURRENCY_CONFIG, formatCurrency as formatCurrencyUtil } from "@/lib/utils";
+import { CurrencyContext } from "@/contexts/currency-context";
 
 interface CashFlowData {
   month: string;
@@ -18,21 +20,19 @@ interface CashFlowData {
 
 interface CashFlowChartProps {
   data?: CashFlowData[];
+  currency?: CurrencyCode;
 }
 
-export default function CashFlowChart({ data = [] }: CashFlowChartProps) {
+export default function CashFlowChart({ data = [], currency: propCurrency }: CashFlowChartProps) {
   const [activeTab, setActiveTab] = useState("monthly");
   const [mounted, setMounted] = useState(false);
+  
+  // Use the currency from context if available, otherwise use the prop
+  const currencyContext = useContext(CurrencyContext);
+  const currency = propCurrency || currencyContext?.currency || 'USD';
 
   // Default data if none provided
-  const defaultData: CashFlowData[] = [
-    { month: "Jan", income: 18000, expenses: 14500 },
-    { month: "Feb", income: 20500, expenses: 16200 },
-    { month: "Mar", income: 19800, expenses: 15600 },
-    { month: "Apr", income: 22000, expenses: 17800 },
-    { month: "May", income: 24500, expenses: 18200 },
-    { month: "Jun", income: 26000, expenses: 19500 },
-  ];
+  const defaultData: CashFlowData[] = [];
 
   const displayData = data.length > 0 ? data : defaultData;
 
@@ -44,13 +44,19 @@ export default function CashFlowChart({ data = [] }: CashFlowChartProps) {
   );
   const netCashFlow = totalIncome - totalExpenses;
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+  const formatCurrency = (value: number) => {
+    if (!currency || !CURRENCY_CONFIG[currency]) {
+      return new Intl.NumberFormat('en-US', {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      }).format(value);
+    }
+    
+    return formatCurrencyUtil(value, currency, {
+      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
+      maximumFractionDigits: 0
+    });
   };
 
   // Find the maximum value for scaling the chart

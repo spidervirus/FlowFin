@@ -3,17 +3,27 @@
 import { FinancialGoal } from "@/types/financial";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { formatCurrency } from "@/utils/utils";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
 import { CalendarClock, CheckCircle, Clock, Target } from "lucide-react";
 
 interface GoalsOverviewProps {
   goals: FinancialGoal[];
+  currency: CurrencyCode;
 }
 
-export default function GoalsOverview({ goals }: GoalsOverviewProps) {
+export default function GoalsOverview({ goals = [], currency }: GoalsOverviewProps) {
   const [activeTab, setActiveTab] = useState("all");
+  
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
   
   // Filter goals based on active tab
   const filteredGoals = goals.filter(goal => {

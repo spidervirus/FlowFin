@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Card,
   CardContent,
@@ -6,20 +8,25 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { CurrencyCode, CURRENCY_CONFIG, formatCurrency as formatCurrencyUtil } from "@/lib/utils";
+import { useContext } from "react";
+import { CurrencyContext } from "@/contexts/currency-context";
 
 interface Account {
   id: string;
   name: string;
   balance: number;
-  type: "receivable" | "payable";
+  type: string;
   dueDate?: string;
 }
 
 interface AccountsSummaryProps {
-  title: string;
-  description: string;
-  accounts: Account[];
-  type: "receivable" | "payable";
+  title?: string;
+  description?: string;
+  accounts?: Account[];
+  type?: "receivable" | "payable";
+  currency?: CurrencyCode;
+  isLoading?: boolean;
 }
 
 export default function AccountsSummary({
@@ -27,55 +34,16 @@ export default function AccountsSummary({
   description = "Outstanding customer invoices",
   accounts = [],
   type = "receivable",
+  currency: propCurrency,
+  isLoading = false
 }: AccountsSummaryProps) {
-  // Default accounts if none provided
-  const defaultReceivables = [
-    {
-      id: "1",
-      name: "ABC Corporation",
-      balance: 5000,
-      type: "receivable",
-      dueDate: "2023-07-15",
-    },
-    {
-      id: "2",
-      name: "XYZ Ltd",
-      balance: 3200,
-      type: "receivable",
-      dueDate: "2023-07-20",
-    },
-    {
-      id: "3",
-      name: "Acme Inc",
-      balance: 1800,
-      type: "receivable",
-      dueDate: "2023-07-25",
-    },
-  ];
+  // Use the currency from context if available, otherwise use the prop
+  const currencyContext = useContext(CurrencyContext);
+  const currency = propCurrency || currencyContext?.currency || 'USD';
 
-  const defaultPayables = [
-    {
-      id: "1",
-      name: "Office Supplies Co",
-      balance: 850,
-      type: "payable",
-      dueDate: "2023-07-10",
-    },
-    {
-      id: "2",
-      name: "Tech Solutions",
-      balance: 2400,
-      type: "payable",
-      dueDate: "2023-07-15",
-    },
-    {
-      id: "3",
-      name: "Utility Provider",
-      balance: 320,
-      type: "payable",
-      dueDate: "2023-07-20",
-    },
-  ];
+  // Default accounts if none provided
+  const defaultReceivables: Account[] = [];
+  const defaultPayables: Account[] = [];
 
   const displayAccounts =
     accounts.length > 0
@@ -89,13 +57,19 @@ export default function AccountsSummary({
     0,
   );
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+  const formatCurrency = (value: number) => {
+    if (!currency || !CURRENCY_CONFIG[currency]) {
+      return new Intl.NumberFormat('en-US', {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      }).format(value);
+    }
+    
+    return formatCurrencyUtil(value, currency, {
+      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
+      maximumFractionDigits: 0
+    });
   };
 
   const formatDate = (dateString?: string) => {

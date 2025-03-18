@@ -34,6 +34,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Transaction } from "@/types/financial";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 
 interface ExtractedData {
   merchant: string;
@@ -45,7 +46,22 @@ interface ExtractedData {
   }[];
 }
 
-export default function ReceiptScanner() {
+interface ReceiptScannerProps {
+  currency: CurrencyCode;
+}
+
+export default function ReceiptScanner({ currency }: ReceiptScannerProps) {
+  const [isLoading, setIsLoading] = useState(true);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
   return (
     <Card className="w-full">
       <CardHeader>

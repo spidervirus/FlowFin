@@ -28,14 +28,16 @@ export function suggestCategory(description: string, amount: number, type: strin
   
   // Step 1: Check for exact matches in previous transactions
   const exactMatches = previousTransactions.filter(
-    t => t.description.toLowerCase() === lowerDescription && t.category
+    t => t.description?.toLowerCase() === lowerDescription && t.category
   );
   
   if (exactMatches.length > 0) {
     // Find the most common category for exact matches
     const categoryCounts = exactMatches.reduce((counts, transaction) => {
-      const categoryId = transaction.category;
-      counts[categoryId] = (counts[categoryId] || 0) + 1;
+      if (transaction.category) {
+        const categoryKey = String(transaction.category);
+        counts[categoryKey] = (counts[categoryKey] || 0) + 1;
+      }
       return counts;
     }, {} as Record<string, number>);
     
@@ -87,8 +89,10 @@ export function suggestCategory(description: string, amount: number, type: strin
   if (similarTransactions.length > 0) {
     // Find the most common category for similar transactions
     const categoryCounts = similarTransactions.reduce((counts, transaction) => {
-      const categoryId = transaction.category;
-      counts[categoryId] = (counts[categoryId] || 0) + 1;
+      if (transaction.category) {
+        const categoryKey = String(transaction.category);
+        counts[categoryKey] = (counts[categoryKey] || 0) + 1;
+      }
       return counts;
     }, {} as Record<string, number>);
     
@@ -121,7 +125,7 @@ export function suggestCategory(description: string, amount: number, type: strin
 export function trainModel(newTransaction: Transaction): void {
   // In a real ML system, this would update the model with new data
   // For our simple implementation, we're just using the existing data each time
-  console.log("Model training with new transaction:", newTransaction.description);
+  console.log("Model training with new transaction:", newTransaction.description || "No description");
 }
 
 // Function to get confidence score for a suggestion
@@ -135,8 +139,8 @@ export function getSuggestionConfidence(
   
   // Find similar transactions
   const similarTransactions = previousTransactions.filter(
-    t => t.description.toLowerCase().includes(lowerDescription) || 
-         lowerDescription.includes(t.description.toLowerCase())
+    t => (t.description?.toLowerCase().includes(lowerDescription) || 
+         lowerDescription.includes(t.description?.toLowerCase() || ""))
   );
   
   if (similarTransactions.length === 0) {

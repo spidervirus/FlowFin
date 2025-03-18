@@ -2,10 +2,42 @@
 
 const nextConfig = {
   images: {
-    domains: ["images.unsplash.com", "api.dicebear.com"],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com'
+      },
+      {
+        protocol: 'https',
+        hostname: 'api.dicebear.com'
+      }
+    ],
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
-  skipTrailingSlashRedirect: true,
-  skipMiddlewareUrlNormalize: true,
+  reactStrictMode: true,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  experimental: {
+    optimizePackageImports: ['@/components/ui']
+  },
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  eslint: {
+    ignoreDuringBuilds: false,
+  },
+  swcMinify: true,
+  webpack: (config, { isServer }) => {
+    // Exclude test files from the build
+    config.module.rules.push({
+      test: /test\/.*$/,
+      loader: 'ignore-loader'
+    });
+    return config;
+  }
 };
 
 if (process.env.NEXT_PUBLIC_TEMPO) {
@@ -13,8 +45,6 @@ if (process.env.NEXT_PUBLIC_TEMPO) {
     nextConfig["experimental"] = {};
   }
   
-  // NextJS 13.4.8 up to 14.1.3:
-  // nextConfig.experimental.swcPlugins = [[require.resolve("tempo-devtools/swc/0.86"), {}]];
   // NextJS 14.1.3 to 14.2.11:
   nextConfig.experimental.swcPlugins = [[require.resolve("tempo-devtools/swc/0.90"), {}]];
 

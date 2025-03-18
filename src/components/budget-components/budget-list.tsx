@@ -19,15 +19,26 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useRouter } from "next/navigation";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 
 interface BudgetListProps {
   budgets: Budget[];
+  currency: CurrencyCode;
 }
 
-export default function BudgetList({ budgets }: BudgetListProps) {
+export default function BudgetList({ budgets, currency }: BudgetListProps) {
   const router = useRouter();
   const [deletingBudgetId, setDeletingBudgetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
 
   const handleDeleteBudget = async () => {
     if (!deletingBudgetId) return;
@@ -110,7 +121,7 @@ export default function BudgetList({ budgets }: BudgetListProps) {
                           color: category.category?.color || undefined
                         }}
                       >
-                        {category.category?.name}: ${category.amount.toFixed(2)}
+                        {category.category?.name}: {formatCurrency(category.amount)}
                       </Badge>
                     ))}
                   </div>

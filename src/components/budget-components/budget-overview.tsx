@@ -3,17 +3,27 @@
 import { Budget, BudgetTracking } from "@/types/financial";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { formatCurrency } from "@/utils/utils";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface BudgetOverviewProps {
   budgets: Budget[];
   tracking: BudgetTracking[];
+  currency: CurrencyCode;
 }
 
-export default function BudgetOverview({ budgets, tracking }: BudgetOverviewProps) {
+export default function BudgetOverview({ budgets, tracking, currency }: BudgetOverviewProps) {
   const [activeTab, setActiveTab] = useState("overview");
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
 
   // Calculate total budget and spending
   const totalBudget = tracking.reduce((sum, item) => sum + item.planned_amount, 0);

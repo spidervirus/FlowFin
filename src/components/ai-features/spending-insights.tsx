@@ -43,8 +43,10 @@ import {
   CreditCard, 
   Lightbulb
 } from "lucide-react";
-import { createClient } from "@/lib/supabase-browser";
+import { createClient } from "@/lib/supabase/client";
 import { Transaction, Category } from "@/types/financial";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface SpendingInsight {
   title: string;
@@ -73,9 +75,20 @@ interface CategoryData {
   color?: string;
 }
 
+interface CompanySettings {
+  company_name: string;
+  default_currency: CurrencyCode;
+  fiscal_year_start: string;
+  industry: string;
+}
+
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1'];
 
-export default function SpendingInsights() {
+interface SpendingInsightsProps {
+  currency: CurrencyCode;
+}
+
+export default function SpendingInsights({ currency }: SpendingInsightsProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -85,10 +98,11 @@ export default function SpendingInsights() {
   const [monthlySpending, setMonthlySpending] = useState<MonthlySpending[]>([]);
   const [savingSuggestions, setSavingSuggestions] = useState<SpendingInsight[]>([]);
   const [timeframe, setTimeframe] = useState<"30days" | "90days" | "6months" | "12months">("30days");
+  const [settings, setSettings] = useState<CompanySettings | null>(null);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [timeframe]);
 
   useEffect(() => {
     if (transactions.length > 0 && categories.length > 0) {
@@ -103,9 +117,33 @@ export default function SpendingInsights() {
     try {
       const supabase = createClient();
       
-      // Get date range based on timeframe
+      // Get user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!user) {
+        setError("User not authenticated");
+        return;
+      }
+
+      // Fetch company settings
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('company_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (settingsError) {
+        console.error('Error fetching company settings:', settingsError);
+        toast.error('Failed to load company settings');
+        return;
+      }
+
+      setSettings(settingsData);
+      
+      // Get date range based on timeframe and fiscal year start
       const endDate = new Date();
       const startDate = new Date();
+      const fiscalYearStart = parseInt(settingsData?.fiscal_year_start || '1');
       
       switch (timeframe) {
         case "30days":
@@ -118,7 +156,14 @@ export default function SpendingInsights() {
           startDate.setMonth(startDate.getMonth() - 6);
           break;
         case "12months":
-          startDate.setMonth(startDate.getMonth() - 12);
+          // Adjust for fiscal year
+          const currentMonth = endDate.getMonth() + 1;
+          if (currentMonth < fiscalYearStart) {
+            startDate.setFullYear(startDate.getFullYear() - 1);
+            startDate.setMonth(fiscalYearStart - 1);
+          } else {
+            startDate.setMonth(fiscalYearStart - 1);
+          }
           break;
       }
       
@@ -126,6 +171,7 @@ export default function SpendingInsights() {
       const { data: transactionsData, error: transactionsError } = await supabase
         .from("transactions")
         .select("*, category:category_id(id, name, type, color)")
+        .eq('user_id', user.id)
         .gte("date", startDate.toISOString().split('T')[0])
         .lte("date", endDate.toISOString().split('T')[0])
         .order("date", { ascending: false });
@@ -138,6 +184,7 @@ export default function SpendingInsights() {
       const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
         .select("*")
+        .eq('user_id', user.id)
         .eq("is_active", true);
       
       if (categoriesError) {
@@ -146,8 +193,13 @@ export default function SpendingInsights() {
       
       setTransactions(transactionsData || []);
       setCategories(categoriesData || []);
+
+      // Show success message
+      toast.success('Data refreshed successfully');
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An unknown error occurred");
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+      setError(errorMessage);
+      toast.error(`Error: ${errorMessage}`);
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -387,11 +439,10 @@ export default function SpendingInsights() {
     
     // Subscription suggestion
     const subscriptionKeywords = ["subscription", "netflix", "spotify", "hulu", "disney", "apple", "amazon prime", "membership"];
-    const subscriptionExpenses = expenses.filter(e => 
-      subscriptionKeywords.some(keyword => 
-        e.description.toLowerCase().includes(keyword)
-      )
-    );
+    const subscriptionExpenses = expenses.filter(e => {
+      const description = e.description?.toLowerCase() || '';
+      return subscriptionKeywords.some(keyword => description.includes(keyword));
+    });
     
     if (subscriptionExpenses.length > 0) {
       const subscriptionTotal = subscriptionExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -406,24 +457,23 @@ export default function SpendingInsights() {
     }
     
     // Coffee suggestion
-    const coffeeKeywords = ["coffee", "starbucks", "cafe", "latte", "espresso"];
-    const coffeeExpenses = expenses.filter(e => 
-      coffeeKeywords.some(keyword => 
-        e.description.toLowerCase().includes(keyword)
-      )
-    );
+    const foodKeywords = ["food", "restaurant", "grocery", "meal", "dining", "cafe", "coffee", "takeout"];
+    const foodExpenses = expenses.filter(e => {
+      const description = e.description?.toLowerCase() || '';
+      return foodKeywords.some(keyword => description.includes(keyword));
+    });
     
-    if (coffeeExpenses.length >= 5) {
-      const coffeeTotal = coffeeExpenses.reduce((sum, e) => sum + e.amount, 0);
-      const coffeeAvg = coffeeTotal / getDateRangeInDays() * 30; // Monthly average
+    if (foodExpenses.length >= 5) {
+      const foodTotal = foodExpenses.reduce((sum, e) => sum + e.amount, 0);
+      const foodAvg = foodTotal / getDateRangeInDays() * 30; // Monthly average
       
-      if (coffeeAvg > 50) {
+      if (foodAvg > 50) {
         suggestions.push({
-          title: "Coffee Expenses",
-          description: `You spend about ${formatCurrency(coffeeAvg)} monthly on coffee. Making coffee at home could save you around ${formatCurrency(Math.round(coffeeAvg * 0.7))} per month.`,
+          title: "Food Expenses",
+          description: `You spend about ${formatCurrency(foodAvg)} monthly on food. Cooking at home more often could save you around ${formatCurrency(Math.round(foodAvg * 0.7))} per month.`,
           type: "suggestion",
           icon: <Coffee className="h-5 w-5 text-green-500" />,
-          value: formatCurrency(Math.round(coffeeAvg * 0.7))
+          value: formatCurrency(Math.round(foodAvg * 0.7))
         });
       }
     }
@@ -453,17 +503,14 @@ export default function SpendingInsights() {
     setSavingSuggestions(suggestions);
   };
 
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+  const formatCurrency = (amount: number) => {
+    const currencyCode = settings?.default_currency || currency;
+    return new Intl.NumberFormat(CURRENCY_CONFIG[currencyCode]?.locale || 'en-US', {
+      style: "currency",
+      currency: currencyCode,
+      minimumFractionDigits: CURRENCY_CONFIG[currencyCode]?.minimumFractionDigits ?? 2,
+      maximumFractionDigits: 2,
     }).format(amount);
-  };
-
-  const refreshData = () => {
-    fetchData();
   };
 
   return (
@@ -473,10 +520,11 @@ export default function SpendingInsights() {
           <div>
             <CardTitle>Spending Insights</CardTitle>
             <CardDescription>
+              {settings?.company_name ? `${settings.company_name} - ` : ''}
               AI-powered analysis of your spending patterns
             </CardDescription>
           </div>
-          <Button variant="outline" size="icon" onClick={refreshData}>
+          <Button variant="outline" size="icon" onClick={fetchData}>
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>

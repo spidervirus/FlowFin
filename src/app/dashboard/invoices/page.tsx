@@ -1,4 +1,6 @@
-import DashboardNavbar from "@/components/dashboard-navbar";
+"use client";
+
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,93 +19,172 @@ import {
 } from "@/components/ui/select";
 import { Download, FileText, Filter, Plus, Search } from "lucide-react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "../../../../supabase/server";
+import { useRouter } from "next/navigation";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
+import { createClient } from '@/lib/supabase/client';
+import DashboardWrapper from "../dashboard-wrapper";
 
-export default async function InvoicesPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return redirect("/sign-in");
+export default function InvoicesPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [settings, setSettings] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [currency, setCurrency] = useState<CurrencyCode>('USD');
+  const [companyName, setCompanyName] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<string>('all');
+  
+  // Define the invoice interface
+  interface Invoice {
+    id: string;
+    client: string;
+    date: string;
+    dueDate: string;
+    amount: number;
+    status: 'paid' | 'pending' | 'overdue' | 'draft';
   }
 
-  // Sample invoices data
-  const invoices = [
-    {
-      id: "INV-001",
-      client: "ABC Corporation",
-      date: "2023-06-15",
-      dueDate: "2023-07-15",
-      amount: 2500,
-      status: "paid",
-    },
-    {
-      id: "INV-002",
-      client: "XYZ Ltd",
-      date: "2023-06-10",
-      dueDate: "2023-07-10",
-      amount: 1800,
-      status: "paid",
-    },
-    {
-      id: "INV-003",
-      client: "Acme Inc",
-      date: "2023-06-05",
-      dueDate: "2023-07-05",
-      amount: 3200,
-      status: "pending",
-    },
-    {
-      id: "INV-004",
-      client: "Global Solutions",
-      date: "2023-05-28",
-      dueDate: "2023-06-28",
-      amount: 4500,
-      status: "overdue",
-    },
-    {
-      id: "INV-005",
-      client: "Tech Innovators",
-      date: "2023-05-20",
-      dueDate: "2023-06-20",
-      amount: 1250,
-      status: "draft",
-    },
-    {
-      id: "INV-006",
-      client: "Creative Studios",
-      date: "2023-05-15",
-      dueDate: "2023-06-15",
-      amount: 3750,
-      status: "overdue",
-    },
-    {
-      id: "INV-007",
-      client: "DEF Enterprises",
-      date: "2023-05-10",
-      dueDate: "2023-06-10",
-      amount: 2800,
-      status: "paid",
-    },
-    {
-      id: "INV-008",
-      client: "Bright Solutions",
-      date: "2023-05-05",
-      dueDate: "2023-06-05",
-      amount: 1950,
-      status: "pending",
-    },
-  ];
+  // Empty invoices array with proper typing
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      
+      try {
+        // Check if user is authenticated
+        const supabaseClient = createClient();
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        if (!user) {
+          router.push('/sign-in');
+          return;
+        }
+        
+        setUser(user);
+        
+        // Get company settings
+        const { data: settingsData, error } = await supabaseClient
+          .from('company_settings')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching company settings:', error);
+        } else if (settingsData) {
+          setSettings(settingsData);
+          setCompanyName(settingsData.company_name || '');
+          
+          // Set currency from settings or default to USD
+          if (settingsData.default_currency) {
+            setCurrency(settingsData.default_currency as CurrencyCode);
+          }
+        }
+        
+        // Fetch invoices from the database
+        const { data: invoicesData, error: invoicesError } = await supabaseClient
+          .from('invoices')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+          
+        if (invoicesError) {
+          console.error('Error fetching invoices:', invoicesError);
+        } else {
+          // Transform the data to match our Invoice interface
+          const formattedInvoices: Invoice[] = (invoicesData || []).map(invoice => ({
+            id: invoice.id,
+            client: invoice.client_name,
+            date: invoice.date,
+            dueDate: invoice.due_date,
+            amount: invoice.total_amount,
+            status: invoice.status as 'paid' | 'pending' | 'overdue' | 'draft'
+          }));
+          
+          setInvoices(formattedInvoices);
+          setFilteredInvoices(formattedInvoices);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchData();
+  }, [router]);
+
+  // Apply filters whenever search query, status filter, or date filter changes
+  useEffect(() => {
+    let filtered = [...invoices];
+    
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(invoice => 
+        invoice.client.toLowerCase().includes(query) ||
+        invoice.id.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(invoice => invoice.status === statusFilter);
+    }
+    
+    // Apply date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      
+      switch (dateFilter) {
+        case 'this-month':
+          filtered = filtered.filter(invoice => {
+            const invoiceDate = new Date(invoice.date);
+            return invoiceDate.getMonth() === currentMonth && 
+                   invoiceDate.getFullYear() === currentYear;
+          });
+          break;
+        case 'last-month':
+          filtered = filtered.filter(invoice => {
+            const invoiceDate = new Date(invoice.date);
+            const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+            const yearOfLastMonth = currentMonth === 0 ? currentYear - 1 : currentYear;
+            return invoiceDate.getMonth() === lastMonth && 
+                   invoiceDate.getFullYear() === yearOfLastMonth;
+          });
+          break;
+        case 'this-quarter':
+          const currentQuarter = Math.floor(currentMonth / 3);
+          filtered = filtered.filter(invoice => {
+            const invoiceDate = new Date(invoice.date);
+            const invoiceQuarter = Math.floor(invoiceDate.getMonth() / 3);
+            return invoiceQuarter === currentQuarter && 
+                   invoiceDate.getFullYear() === currentYear;
+          });
+          break;
+        case 'this-year':
+          filtered = filtered.filter(invoice => {
+            const invoiceDate = new Date(invoice.date);
+            return invoiceDate.getFullYear() === currentYear;
+          });
+          break;
+      }
+    }
+    
+    setFilteredInvoices(filtered);
+  }, [invoices, searchQuery, statusFilter, dateFilter]);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat(CURRENCY_CONFIG[currency]?.locale || 'en-US', {
       style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
+      currency,
+      minimumFractionDigits: CURRENCY_CONFIG[currency]?.minimumFractionDigits ?? 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 
@@ -131,17 +212,28 @@ export default async function InvoicesPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <>
+        <DashboardWrapper>
+          <div className="flex justify-center items-center h-[60vh]">
+            <p className="text-lg">Loading invoices...</p>
+          </div>
+        </DashboardWrapper>
+      </>
+    );
+  }
+
   return (
     <>
-      <DashboardNavbar />
-      <main className="w-full bg-gray-50 min-h-screen">
+      <DashboardWrapper>
         <div className="container mx-auto px-4 py-8 flex flex-col gap-8">
           {/* Header Section */}
           <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">Invoices</h1>
               <p className="text-muted-foreground">
-                Create and manage your client invoices
+                {companyName ? `${companyName} - ` : ''}Create and manage your client invoices
               </p>
             </div>
             <Link href="/dashboard/invoices/new">
@@ -156,29 +248,36 @@ export default async function InvoicesPage() {
             {[
               {
                 title: "Total Invoices",
-                value: "$16,750.00",
-                subtitle: "8 invoices",
+                value: formatCurrency(filteredInvoices.reduce((sum, invoice) => sum + invoice.amount, 0)),
+                subtitle: `${filteredInvoices.length} invoice${filteredInvoices.length !== 1 ? 's' : ''}`,
               },
               {
                 title: "Paid",
-                value: "$7,100.00",
-                subtitle: "3 invoices",
+                value: formatCurrency(filteredInvoices.filter(inv => inv.status === 'paid').reduce((sum, invoice) => sum + invoice.amount, 0)),
+                subtitle: `${filteredInvoices.filter(inv => inv.status === 'paid').length} invoice${filteredInvoices.filter(inv => inv.status === 'paid').length !== 1 ? 's' : ''}`,
                 color: "text-green-600",
+                onClick: () => setStatusFilter('paid')
               },
               {
                 title: "Pending",
-                value: "$5,150.00",
-                subtitle: "2 invoices",
+                value: formatCurrency(filteredInvoices.filter(inv => inv.status === 'pending').reduce((sum, invoice) => sum + invoice.amount, 0)),
+                subtitle: `${filteredInvoices.filter(inv => inv.status === 'pending').length} invoice${filteredInvoices.filter(inv => inv.status === 'pending').length !== 1 ? 's' : ''}`,
                 color: "text-yellow-600",
+                onClick: () => setStatusFilter('pending')
               },
               {
                 title: "Overdue",
-                value: "$8,250.00",
-                subtitle: "2 invoices",
+                value: formatCurrency(filteredInvoices.filter(inv => inv.status === 'overdue').reduce((sum, invoice) => sum + invoice.amount, 0)),
+                subtitle: `${filteredInvoices.filter(inv => inv.status === 'overdue').length} invoice${filteredInvoices.filter(inv => inv.status === 'overdue').length !== 1 ? 's' : ''}`,
                 color: "text-red-600",
+                onClick: () => setStatusFilter('overdue')
               },
             ].map((card, index) => (
-              <Card key={index}>
+              <Card 
+                key={index} 
+                className={card.onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}
+                onClick={card.onClick}
+              >
                 <CardContent className="pt-6">
                   <div className="text-sm font-medium text-muted-foreground">
                     {card.title}
@@ -204,17 +303,25 @@ export default async function InvoicesPage() {
                   <label className="text-sm font-medium">Search</label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input placeholder="Search invoices..." className="pl-10" />
+                    <Input 
+                      placeholder="Search invoices..." 
+                      className="pl-10" 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
                   </div>
                 </div>
                 <div className="w-full md:w-48 space-y-2">
                   <label className="text-sm font-medium">Status</label>
-                  <Select defaultValue="all">
+                  <Select 
+                    value={statusFilter}
+                    onValueChange={value => setStatusFilter(value)}
+                  >
                     <SelectTrigger>
-                      <SelectValue placeholder="All Statuses" />
+                      <SelectValue placeholder="All Status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="paid">Paid</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="overdue">Overdue</SelectItem>
@@ -224,7 +331,10 @@ export default async function InvoicesPage() {
                 </div>
                 <div className="w-full md:w-48 space-y-2">
                   <label className="text-sm font-medium">Date Range</label>
-                  <Select defaultValue="all">
+                  <Select 
+                    value={dateFilter}
+                    onValueChange={value => setDateFilter(value)}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="All Time" />
                     </SelectTrigger>
@@ -237,7 +347,16 @@ export default async function InvoicesPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button variant="outline" size="icon" className="h-10 w-10">
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  className="h-10 w-10"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setStatusFilter('all');
+                    setDateFilter('all');
+                  }}
+                >
                   <Filter className="h-4 w-4" />
                 </Button>
               </div>
@@ -281,57 +400,105 @@ export default async function InvoicesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {invoices.map((invoice) => (
-                      <tr
-                        key={invoice.id}
-                        className="border-b hover:bg-muted/50 cursor-pointer"
-                      >
-                        <td className="py-3 px-4 font-medium">{invoice.id}</td>
-                        <td className="py-3 px-4">{invoice.client}</td>
-                        <td className="py-3 px-4">
-                          {formatDate(invoice.date)}
-                        </td>
-                        <td className="py-3 px-4">
-                          {formatDate(invoice.dueDate)}
-                        </td>
-                        <td className="py-3 px-4 font-medium">
-                          {formatCurrency(invoice.amount)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`inline-block px-2 py-1 rounded-full text-xs ${getStatusColor(invoice.status)}`}
-                          >
-                            {invoice.status.charAt(0).toUpperCase() +
-                              invoice.status.slice(1)}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
+                    {filteredInvoices.length > 0 ? (
+                      filteredInvoices.map((invoice) => (
+                        <tr
+                          key={invoice.id}
+                          className="border-b hover:bg-muted/50 cursor-pointer"
+                          onClick={() => router.push(`/dashboard/invoices/${invoice.id}`)}
+                        >
+                          <td className="py-3 px-4 font-medium">{invoice.id.substring(0, 8)}</td>
+                          <td className="py-3 px-4">{invoice.client}</td>
+                          <td className="py-3 px-4">
+                            {formatDate(invoice.date)}
+                          </td>
+                          <td className="py-3 px-4">
+                            {formatDate(invoice.dueDate)}
+                          </td>
+                          <td className="py-3 px-4">
+                            {formatCurrency(invoice.amount)}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-block px-2 py-1 rounded text-xs font-medium ${getStatusColor(
+                                invoice.status
+                              )}`}
                             >
-                              <FileText className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
+                              {invoice.status.charAt(0).toUpperCase() +
+                                invoice.status.slice(1)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                title="View Invoice"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/dashboard/invoices/${invoice.id}`);
+                                }}
+                              >
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                title="Download Invoice"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // This would handle invoice download in a real implementation
+                                  alert('Download functionality would be implemented here');
+                                }}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center">
+                          <div className="flex flex-col items-center justify-center">
+                            <FileText className="h-12 w-12 text-muted-foreground mb-4 opacity-30" />
+                            <h3 className="text-lg font-medium mb-2">No Invoices Found</h3>
+                            <p className="text-muted-foreground mb-4">
+                              {searchQuery || statusFilter !== 'all' || dateFilter !== 'all' ? 
+                                'No invoices match your current filters. Try adjusting your search criteria.' : 
+                                'You haven\'t created any invoices yet. Get started by creating your first invoice.'}
+                            </p>
+                            {searchQuery || statusFilter !== 'all' || dateFilter !== 'all' ? (
+                              <Button 
+                                variant="outline" 
+                                onClick={() => {
+                                  setSearchQuery('');
+                                  setStatusFilter('all');
+                                  setDateFilter('all');
+                                }}
+                              >
+                                Clear Filters
+                              </Button>
+                            ) : (
+                              <Link href="/dashboard/invoices/new">
+                                <Button>
+                                  <Plus className="mr-2 h-4 w-4" /> Create Invoice
+                                </Button>
+                              </Link>
+                            )}
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
             </CardContent>
           </Card>
         </div>
-      </main>
+      </DashboardWrapper>
     </>
   );
 }

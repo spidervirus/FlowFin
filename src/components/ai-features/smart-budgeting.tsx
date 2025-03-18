@@ -49,6 +49,8 @@ import { Transaction, Category } from "@/types/financial";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface BudgetRecommendation {
   category: string;
@@ -66,7 +68,24 @@ interface CategorySpending {
   color: string;
 }
 
-export default function SmartBudgeting() {
+interface CompanySettings {
+  id: string;
+  user_id: string;
+  company_name: string;
+  address: string;
+  country: string;
+  default_currency: CurrencyCode;
+  fiscal_year_start: string;
+  industry: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface SmartBudgetingProps {
+  currency: CurrencyCode;
+}
+
+export default function SmartBudgeting({ currency }: SmartBudgetingProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -78,6 +97,7 @@ export default function SmartBudgeting() {
   const [savingsGoal, setSavingsGoal] = useState(0.2); // 20% of income by default
   const [selectedRecommendations, setSelectedRecommendations] = useState<string[]>([]);
   const [creatingBudget, setCreatingBudget] = useState(false);
+  const [settings, setSettings] = useState<CompanySettings | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -90,10 +110,34 @@ export default function SmartBudgeting() {
     try {
       const supabase = createClient();
       
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!user) {
+        setError("Please sign in to access this feature");
+        setIsLoading(false);
+        return;
+      }
+
+      // Fetch company settings
+      const { data: settingsData, error: settingsError } = await supabase
+        .from("company_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
+      if (settingsError) {
+        console.error("Error fetching company settings:", settingsError);
+        toast.error("Failed to load company settings");
+      } else {
+        setSettings(settingsData);
+      }
+      
       // Fetch categories
       const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
         .select("*")
+        .eq("user_id", user.id)
         .order("name");
       
       if (categoriesError) throw categoriesError;
@@ -108,6 +152,7 @@ export default function SmartBudgeting() {
           *,
           category:categories(id, name, type, color)
         `)
+        .eq("user_id", user.id)
         .gte("date", threeMonthsAgo.toISOString().split('T')[0])
         .order("date", { ascending: false });
       
@@ -134,10 +179,12 @@ export default function SmartBudgeting() {
       setRecommendations(recs);
       
       setIsLoading(false);
+      toast.success("Data loaded successfully");
     } catch (err) {
       console.error("Error fetching data:", err);
       setError("Failed to load data. Please try again.");
       setIsLoading(false);
+      toast.error("Failed to load data");
     }
   };
 
@@ -329,12 +376,13 @@ export default function SmartBudgeting() {
     }
   };
 
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+  const formatCurrency = (amount: number) => {
+    const currencyCode = settings?.default_currency || currency;
+    return new Intl.NumberFormat(CURRENCY_CONFIG[currencyCode]?.locale || 'en-US', {
+      style: "currency",
+      currency: currencyCode,
+      minimumFractionDigits: CURRENCY_CONFIG[currencyCode]?.minimumFractionDigits ?? 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 
@@ -356,6 +404,13 @@ export default function SmartBudgeting() {
     try {
       const supabase = createClient();
       
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!user) {
+        throw new Error("Please sign in to create a budget");
+      }
+      
       // Create a new budget
       const startDate = new Date();
       const endDate = new Date();
@@ -364,6 +419,7 @@ export default function SmartBudgeting() {
       const { data: budget, error: budgetError } = await supabase
         .from('budgets')
         .insert({
+          user_id: user.id,
           name: `AI Budget ${startDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`,
           description: 'Created with AI Smart Budgeting',
           start_date: startDate.toISOString().split('T')[0],
@@ -383,7 +439,8 @@ export default function SmartBudgeting() {
         return {
           budget_id: budget.id,
           category_id: categoryId,
-          amount: recommendation?.recommendedBudget || 0
+          amount: recommendation?.recommendedBudget || 0,
+          user_id: user.id
         };
       });
       
@@ -393,6 +450,8 @@ export default function SmartBudgeting() {
       
       if (categoriesError) throw categoriesError;
       
+      toast.success("Budget created successfully");
+      
       // Redirect to the budgets page
       window.location.href = '/dashboard/budgets';
       
@@ -400,6 +459,7 @@ export default function SmartBudgeting() {
       console.error("Error creating budget:", err);
       setError("Failed to create budget. Please try again.");
       setCreatingBudget(false);
+      toast.error("Failed to create budget");
     }
   };
 

@@ -127,7 +127,7 @@ export default function PredictiveAnalytics() {
                       ></div>
                     </div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
-                      {item.prediction && (
+                      {'prediction' in item && item.prediction && (
                         <TrendingUp className="h-3 w-3 text-blue-500" />
                       )}
                       {item.month}

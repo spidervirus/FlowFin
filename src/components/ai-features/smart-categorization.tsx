@@ -26,8 +26,13 @@ import {
   Check,
   Sparkles,
 } from "lucide-react";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 
-export default function SmartCategorization() {
+interface SmartCategorizationProps {
+  currency: CurrencyCode;
+}
+
+export default function SmartCategorization({ currency }: SmartCategorizationProps) {
   const [description, setDescription] = useState("");
   const [suggestions, setSuggestions] = useState<null | {
     category: string;
@@ -163,10 +168,11 @@ export default function SmartCategorization() {
   ];
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
       style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
+      currency,
+      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 

@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { signOutAction } from "@/app/actions";
+import { usePathname, useRouter } from "next/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,12 +27,39 @@ import {
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
+import { useAuth } from "@/lib/auth/auth-context";
+import { useState, useEffect } from "react";
 
 export default function DashboardNavbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, signOut } = useAuth();
+  const [userInitials, setUserInitials] = useState("U");
+  
+  useEffect(() => {
+    if (user?.email) {
+      const email = user.email;
+      const initials = email.charAt(0).toUpperCase();
+      setUserInitials(initials);
+    }
+  }, [user]);
 
   const isActive = (path: string) => {
     return pathname === path || pathname.startsWith(`${path}/`);
+  };
+
+  const handleSignOut = async (e: React.MouseEvent<Element, MouseEvent>) => {
+    e.preventDefault();
+    try {
+      const result = await signOut();
+      if (result.success) {
+        router.push('/sign-in');
+      } else {
+        console.error('Sign out failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Error during sign out:', error);
+    }
   };
 
   const navItems = [
@@ -114,7 +140,7 @@ export default function DashboardNavbar() {
               >
                 <Avatar className="h-8 w-8">
                   <AvatarImage src="" alt="User" />
-                  <AvatarFallback>U</AvatarFallback>
+                  <AvatarFallback>{userInitials}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
@@ -122,27 +148,10 @@ export default function DashboardNavbar() {
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings" className="cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </Link>
+                <Link href="/dashboard/settings">Settings</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings/profile" className="cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="cursor-pointer"
-                onSelect={(e) => {
-                  e.preventDefault();
-                  signOutAction();
-                }}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
+              <DropdownMenuItem onClick={handleSignOut}>
+                Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -196,3 +205,4 @@ export default function DashboardNavbar() {
     </header>
   );
 }
+

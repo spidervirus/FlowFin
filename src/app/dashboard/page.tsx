@@ -2,7 +2,8 @@ import DashboardNavbar from "@/components/dashboard-navbar";
 import { InfoIcon, Plus } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "../../../supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { createSupabaseClient } from '@/lib/supabase-client';
 import FinancialOverviewCard from "@/components/dashboard-components/financial-overview-card";
 import RecentTransactions from "@/components/dashboard-components/recent-transactions";
 import AccountsSummary from "@/components/dashboard-components/accounts-summary";
@@ -11,6 +12,35 @@ import BudgetWidget from "@/components/dashboard-components/budget-widget";
 import GoalsWidget from "@/components/dashboard-components/goals-widget";
 import { Button } from "@/components/ui/button";
 import { BudgetTracking } from "@/types/financial";
+import { CurrencyCode } from "@/lib/utils";
+import DashboardWrapper from "./dashboard-wrapper";
+import { headers } from "next/headers";
+import FallbackDashboardNew from "@/components/dashboard-components/fallback-dashboard-new";
+import { createClient as createServerClient } from '@supabase/supabase-js';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { LucideProps } from "lucide-react";
+import ProcessPendingSetup from "@/components/dashboard-components/process-pending-setup";
+
+// Define Icons object with necessary icons
+const Icons = {
+  dollarSign: (props: LucideProps) => (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="12" y1="1" x2="12" y2="23"></line>
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+    </svg>
+  ),
+};
 
 export default async function Dashboard() {
   const supabase = await createClient();
@@ -20,175 +50,255 @@ export default async function Dashboard() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return redirect("/sign-in");
+    redirect('/auth/sign-in');
   }
 
-  // Get current month for filtering - format as YYYY-MM-DD to avoid time zone issues
-  const currentDate = new Date();
-  const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-01`;
+  // Get company settings
+  const supabaseClient = createSupabaseClient();
+  const { data: settings } = await supabaseClient
+    .from('company_settings')
+    .select('*')
+    .single();
 
-  // Get active budgets for current month
-  const { data: budgets, error: budgetsError } = await supabase
-    .from("budgets")
-    .select(`
-      *,
-      budget_categories(
-        id,
-        amount,
-        category:categories(id, name, type, color)
-      )
-    `)
-    .eq("user_id", user.id)
-    .eq("is_active", true)
-    .lte("start_date", currentDate.toISOString().split('T')[0])
-    .gte("end_date", currentDate.toISOString().split('T')[0])
-    .order("created_at", { ascending: false });
+  // Use default currency if settings don't exist
+  const currency = settings?.default_currency as CurrencyCode || 'USD';
 
-  if (budgetsError) {
-    console.error("Error fetching budgets:", budgetsError);
-  }
+  // Fetch all necessary data
+  const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const firstDayOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastDayOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-  // Get budget tracking data for current month
-  let tracking: BudgetTracking[] = [];
-  if (budgets && budgets.length > 0) {
-    const budgetIds = budgets.map((budget) => budget.id);
-    const { data: trackingData, error: trackingError } = await supabase
-      .from("budget_tracking")
-      .select(`
-        *,
-        category:categories(id, name, type, color)
-      `)
-      .in("budget_id", budgetIds)
-      .eq("month", currentMonth);
+  // Fetch transactions for current and last month
+  const { data: currentMonthTransactions } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('user_id', user.id)
+    .gte('date', firstDayOfMonth.toISOString())
+    .lte('date', lastDayOfMonth.toISOString());
 
-    if (trackingError) {
-      console.error("Error fetching budget tracking:", trackingError);
-    } else if (trackingData) {
-      tracking = trackingData;
-      
-      // Add tracking data to each budget
-      budgets.forEach((budget) => {
-        budget.tracking = tracking.filter(
-          (item) => item.budget_id === budget.id
-        );
-      });
-    }
-  }
+  const { data: lastMonthTransactions } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('user_id', user.id)
+    .gte('date', firstDayOfLastMonth.toISOString())
+    .lte('date', lastDayOfLastMonth.toISOString());
 
-  // Get active goals
-  const { data: goals, error: goalsError } = await supabase
-    .from("financial_goals")
+  // Calculate current month metrics
+  const currentMonthRevenue = currentMonthTransactions
+    ?.filter(t => t.type === 'income')
+    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
+
+  const currentMonthExpenses = currentMonthTransactions
+    ?.filter(t => t.type === 'expense')
+    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
+
+  // Calculate last month metrics for comparison
+  const lastMonthRevenue = lastMonthTransactions
+    ?.filter(t => t.type === 'income')
+    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
+
+  const lastMonthExpenses = lastMonthTransactions
+    ?.filter(t => t.type === 'expense')
+    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
+
+  // Calculate percentage changes
+  const revenueChange = lastMonthRevenue ? ((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0;
+  const expensesChange = lastMonthExpenses ? ((currentMonthExpenses - lastMonthExpenses) / lastMonthExpenses) * 100 : 0;
+  const netProfitChange = lastMonthRevenue ? (((currentMonthRevenue - currentMonthExpenses) - (lastMonthRevenue - lastMonthExpenses)) / (lastMonthRevenue - lastMonthExpenses)) * 100 : 0;
+
+  // Fetch accounts data
+  const { data: accounts } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('user_id', user.id);
+
+  // Calculate account balances
+  const totalBalance = accounts
+    ?.reduce((sum, account) => sum + (parseFloat(account.balance) || 0), 0) || 0;
+
+  const lastMonthBalance = accounts
+    ?.reduce((sum, account) => sum + (parseFloat(account.previous_balance) || 0), 0) || 0;
+
+  const balanceChange = lastMonthBalance ? ((totalBalance - lastMonthBalance) / lastMonthBalance) * 100 : 0;
+
+  // Fetch accounts receivable and payable
+  const receivableAccounts = accounts?.filter(a => a.type === 'receivable') || [];
+  const payableAccounts = accounts?.filter(a => a.type === 'payable') || [];
+
+  // Fetch recent transactions
+  const { data: recentTransactions } = await supabase
+    .from('transactions')
     .select(`
       *,
       category:categories(*)
     `)
-    .eq("user_id", user.id)
-    .eq("is_active", true)
-    .order("target_date", { ascending: true });
+    .eq('user_id', user.id)
+    .order('date', { ascending: false })
+    .limit(5);
 
-  if (goalsError) {
-    console.error("Error fetching goals:", goalsError);
-  }
+  // Fetch budgets and tracking data
+  const { data: budgets } = await supabase
+    .from('budgets')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('is_active', true);
+
+  const { data: tracking } = await supabase
+    .from('budget_tracking')
+    .select('*')
+    .eq('user_id', user.id);
+
+  // Fetch active goals
+  const { data: goals } = await supabase
+    .from('goals')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('is_completed', false);
+
+  // Fetch cash flow data for the chart (last 12 months)
+  const firstDayOfYear = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+  const { data: cashFlowTransactions } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('user_id', user.id)
+    .gte('date', firstDayOfYear.toISOString())
+    .lte('date', lastDayOfMonth.toISOString());
+
+  // Process cash flow data
+  const cashFlowData = Array.from({ length: 12 }, (_, i) => {
+    const month = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+    const monthTransactions = cashFlowTransactions?.filter(t => {
+      const transDate = new Date(t.date);
+      return transDate.getMonth() === month.getMonth() && transDate.getFullYear() === month.getFullYear();
+    }) || [];
+
+    const income = monthTransactions
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const expenses = monthTransactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    return {
+      month: month.toLocaleString('default', { month: 'short' }),
+      income,
+      expenses
+    };
+  });
 
   return (
-    <>
-      <DashboardNavbar />
-      <main className="w-full bg-gray-50 min-h-screen">
-        <div className="container mx-auto px-4 py-8 flex flex-col gap-8">
-          {/* Header Section */}
-          <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold">Financial Dashboard</h1>
-              <p className="text-muted-foreground">
-                Welcome back, {user.user_metadata?.full_name || user.email}
-              </p>
+    <DashboardWrapper>
+      <main className="flex-1">
+        <div className="flex flex-col gap-4 p-4 md:p-6">
+          <div className="flex flex-col gap-4 mb-8">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold">
+                {settings?.company_name 
+                  ? `Welcome to ${settings.company_name}'s Dashboard` 
+                  : "Welcome to Your Dashboard"}
+              </h1>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {new Date().toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </span>
+              </div>
             </div>
-            <div className="flex gap-3">
-              <Button variant="outline">Export Reports</Button>
-              <Link href="/dashboard/transactions/new">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" /> Add Transaction
-                </Button>
-              </Link>
-            </div>
-          </header>
+            <p className="text-muted-foreground">
+              {budgets?.length === 0 && tracking?.length === 0 && goals?.length === 0
+                ? "Your account has been set up successfully! Start by adding your accounts and transactions to see your financial data here."
+                : "Track your financial performance and manage your budgets all in one place."}
+            </p>
+          </div>
 
-          {/* Financial Overview Cards */}
           <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <FinancialOverviewCard
               title="Total Revenue"
-              amount={24500}
-              percentageChange={12.5}
+              amount={currentMonthRevenue}
+              percentageChange={revenueChange}
               timeframe="from last month"
               type="income"
+              currency={currency}
             />
             <FinancialOverviewCard
               title="Total Expenses"
-              amount={18200}
-              percentageChange={8.2}
+              amount={currentMonthExpenses}
+              percentageChange={expensesChange}
               timeframe="from last month"
               type="expense"
+              currency={currency}
             />
             <FinancialOverviewCard
               title="Net Profit"
-              amount={6300}
-              percentageChange={15.3}
+              amount={currentMonthRevenue - currentMonthExpenses}
+              percentageChange={netProfitChange}
               timeframe="from last month"
               type="profit"
+              currency={currency}
             />
             <FinancialOverviewCard
               title="Account Balance"
-              amount={42800}
-              percentageChange={5.7}
+              amount={totalBalance}
+              percentageChange={balanceChange}
               timeframe="from last month"
               type="balance"
+              currency={currency}
             />
           </section>
 
           {/* Cash Flow Chart */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <CashFlowChart />
+            <CashFlowChart currency={currency} data={cashFlowData} />
             <AccountsSummary
               title="Accounts Receivable"
               description="Outstanding customer invoices"
-              accounts={[]}
+              accounts={receivableAccounts}
               type="receivable"
+              currency={currency}
             />
             <BudgetWidget 
               budgets={budgets || []} 
-              tracking={tracking} 
+              tracking={tracking || []}
+              currency={currency}
             />
           </section>
 
           {/* Recent Transactions */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <RecentTransactions />
+            <RecentTransactions transactions={recentTransactions || []} currency={currency} />
             <AccountsSummary
               title="Accounts Payable"
               description="Bills to be paid"
-              accounts={[]}
+              accounts={payableAccounts}
               type="payable"
+              currency={currency}
             />
-            <GoalsWidget goals={goals || []} />
+            <GoalsWidget goals={goals || []} currency={currency} />
           </section>
 
           {/* Info Section */}
-          <section className="bg-blue-50 border border-blue-100 rounded-xl p-6 flex gap-4 items-start">
-            <InfoIcon size="20" className="text-blue-500 mt-1" />
-            <div>
-              <h3 className="font-semibold text-blue-800 mb-1">
-                Getting Started
-              </h3>
-              <p className="text-blue-700">
-                This is a demo of the financial dashboard. In a real
-                application, you would connect your bank accounts, import
-                transactions, and manage your finances. Explore the features to
-                see what's possible!
-              </p>
-            </div>
-          </section>
+          {budgets?.length === 0 && tracking?.length === 0 && goals?.length === 0 && (
+            <section className="bg-blue-50 border border-blue-100 rounded-xl p-6 flex gap-4 items-start">
+              <InfoIcon size="20" className="text-blue-500 mt-1" />
+              <div>
+                <h3 className="font-semibold text-blue-800 mb-1">
+                  Getting Started
+                </h3>
+                <p className="text-blue-700">
+                  Your account has been set up successfully! Start by adding your accounts and transactions to see your financial data here. Use the buttons above to get started.
+                </p>
+              </div>
+            </section>
+          )}
         </div>
       </main>
-    </>
+    </DashboardWrapper>
   );
 }

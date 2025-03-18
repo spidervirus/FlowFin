@@ -19,17 +19,27 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
-import { formatCurrency } from "@/utils/utils";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
 interface GoalsListProps {
   goals: FinancialGoal[];
+  currency: CurrencyCode;
 }
 
-export default function GoalsList({ goals }: GoalsListProps) {
+export default function GoalsList({ goals = [], currency }: GoalsListProps) {
   const router = useRouter();
   const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
 
   const handleDeleteGoal = async () => {
     if (!deletingGoalId) return;

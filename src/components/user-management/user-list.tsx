@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -36,7 +36,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { createClient } from "../../../supabase/client";
+import { createSupabaseClient } from '@/lib/supabase-client';
 import { useRouter } from "next/navigation";
 import {
   Edit,
@@ -55,72 +55,102 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/use-toast";
 
 interface User {
   id: string;
-  name: string;
   email: string;
+  user_metadata?: {
+    full_name?: string;
+    avatar_url?: string;
+  };
   role: string;
   status: "active" | "invited" | "inactive";
-  avatar?: string;
-  lastActive?: string;
+  last_active?: string;
 }
 
+interface UserRoleData {
+  id: string;
+  user_id: string;
+  role: string;
+  status: "active" | "invited" | "inactive";
+  last_active: string | null;
+  created_at: string;
+  updated_at: string;
+  email: string;
+  user_metadata: {
+    full_name?: string;
+    avatar_url?: string;
+  } | null;
+}
+
+interface InviteUserResponse {
+  success: boolean;
+  error?: string;
+}
+
+const ROLES = [
+  { value: 'administrator', label: 'Administrator' },
+  { value: 'finance_manager', label: 'Finance Manager' },
+  { value: 'accountant', label: 'Accountant' },
+  { value: 'viewer', label: 'Viewer' }
+];
+
 export default function UserList() {
-  const supabase = createClient();
+  const supabase = createSupabaseClient();
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [inviting, setInviting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-
-  // Sample users data - in a real app, this would come from the database
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: "1",
-      name: "John Doe",
-      email: "john.doe@example.com",
-      role: "Administrator",
-      status: "active",
-      lastActive: "2023-06-15T10:30:00Z",
-    },
-    {
-      id: "2",
-      name: "Jane Smith",
-      email: "jane.smith@example.com",
-      role: "Finance Manager",
-      status: "active",
-      lastActive: "2023-06-14T15:45:00Z",
-    },
-    {
-      id: "3",
-      name: "Robert Johnson",
-      email: "robert.johnson@example.com",
-      role: "Accountant",
-      status: "active",
-      lastActive: "2023-06-10T09:15:00Z",
-    },
-    {
-      id: "4",
-      name: "Emily Davis",
-      email: "emily.davis@example.com",
-      role: "Viewer",
-      status: "invited",
-    },
-    {
-      id: "5",
-      name: "Michael Wilson",
-      email: "michael.wilson@example.com",
-      role: "Accountant",
-      status: "inactive",
-    },
-  ]);
+  const [users, setUsers] = useState<User[]>([]);
 
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    role: "Viewer",
+    role: "viewer",
   });
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch all users and their roles using the view
+      const { data: usersData, error: usersError } = await supabase
+        .from('user_roles_with_auth')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .returns<UserRoleData[]>();
+
+      if (usersError) throw usersError;
+
+      const formattedUsers: User[] = usersData.map(userData => ({
+        id: userData.user_id,
+        email: userData.email,
+        user_metadata: userData.user_metadata || undefined,
+        role: userData.role,
+        status: userData.status,
+        last_active: userData.last_active || undefined
+      }));
+
+      setUsers(formattedUsers);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load users",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -133,31 +163,85 @@ export default function UserList() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setInviting(true);
 
     try {
-      // In a real app, this would invite the user and save to the database
-      const newUser: User = {
-        id: Date.now().toString(),
-        name: formData.name,
-        email: formData.email,
-        role: formData.role,
-        status: "invited",
-      };
+      const { data, error } = await supabase.rpc('invite_user', {
+        p_email: formData.email,
+        p_role: formData.role
+      }).returns<InviteUserResponse>();
 
-      setUsers((prev) => [...prev, newUser]);
+      if (error) throw error;
+      if (!data) throw new Error('No response from server');
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to invite user');
+      }
+
+      toast({
+        title: "Success",
+        description: "User invitation sent successfully",
+      });
+
       setIsDialogOpen(false);
-      setFormData({ name: "", email: "", role: "Viewer" });
+      setFormData({ name: "", email: "", role: "viewer" });
+      fetchUsers(); // Refresh the user list
     } catch (error) {
       console.error("Error inviting user:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to invite user",
+      });
     } finally {
-      setLoading(false);
+      setInviting(false);
     }
   };
 
-  const handleDeleteUser = (userId: string) => {
-    // In a real app, this would delete from the database
-    setUsers((prev) => prev.filter((user) => user.id !== userId));
+  const handleUpdateRole = async (userId: string, newRole: string) => {
+    try {
+      const { error } = await supabase
+        .from('user_roles')
+        .update({ role: newRole })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "User role updated successfully",
+      });
+
+      fetchUsers(); // Refresh the user list
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update user role",
+      });
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      const { error } = await supabase.auth.admin.deleteUser(userId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "User deleted successfully",
+      });
+
+      fetchUsers(); // Refresh the user list
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete user",
+      });
+    }
   };
 
   const getStatusBadge = (status: User["status"]) => {
@@ -215,14 +299,25 @@ export default function UserList() {
 
   // Filter users based on search query and role filter
   const filteredUsers = users.filter((user) => {
+    const userName = user.user_metadata?.full_name || '';
     const matchesSearch =
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
 
     return matchesSearch && matchesRole;
   });
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-10">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -234,9 +329,70 @@ export default function UserList() {
               Manage users and their access to the system
             </CardDescription>
           </div>
-          <Button onClick={() => setIsDialogOpen(true)}>
-            <UserPlus className="mr-2 h-4 w-4" /> Invite User
-          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <UserPlus className="mr-2 h-4 w-4" /> Invite User
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Invite New User</DialogTitle>
+                <DialogDescription>
+                  Send an invitation to a new user to join the system.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit}>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      placeholder="user@example.com"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Role</Label>
+                    <Select
+                      value={formData.role}
+                      onValueChange={handleRoleChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROLES.map((role) => (
+                          <SelectItem key={role.value} value={role.value}>
+                            {role.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="submit" disabled={inviting}>
+                    {inviting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Inviting...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Send Invitation
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -249,58 +405,77 @@ export default function UserList() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-full md:w-[200px]">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="Administrator">Administrator</SelectItem>
-                <SelectItem value="Finance Manager">Finance Manager</SelectItem>
-                <SelectItem value="Accountant">Accountant</SelectItem>
-                <SelectItem value="Viewer">Viewer</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="w-full md:w-48">
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Roles</SelectItem>
+                  {ROLES.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Active</TableHead>
-                <TableHead className="w-[80px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers.length > 0 ? (
-                filteredUsers.map((user) => (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last Active</TableHead>
+                  <TableHead className="w-[100px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar>
-                          <AvatarImage
-                            src={
-                              user.avatar ||
-                              `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`
-                            }
-                          />
-                          <AvatarFallback>
-                            {getInitials(user.name)}
-                          </AvatarFallback>
+                          {user.user_metadata?.avatar_url ? (
+                            <AvatarImage src={user.user_metadata.avatar_url} />
+                          ) : (
+                            <AvatarFallback>
+                              {getInitials(user.user_metadata?.full_name || user.email)}
+                            </AvatarFallback>
+                          )}
                         </Avatar>
                         <div>
-                          <div className="font-medium">{user.name}</div>
+                          <div className="font-medium">
+                            {user.user_metadata?.full_name || "No name"}
+                          </div>
                           <div className="text-sm text-muted-foreground">
                             {user.email}
                           </div>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{user.role}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={user.role}
+                        onValueChange={(value) => handleUpdateRole(user.id, value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ROLES.map((role) => (
+                            <SelectItem key={role.value} value={role.value}>
+                              {role.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
                     <TableCell>{getStatusBadge(user.status)}</TableCell>
-                    <TableCell>{formatDate(user.lastActive)}</TableCell>
+                    <TableCell>{formatDate(user.last_active)}</TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -309,111 +484,30 @@ export default function UserList() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <Edit className="mr-2 h-4 w-4" /> Edit
-                          </DropdownMenuItem>
                           <DropdownMenuItem
+                            className="text-destructive"
                             onClick={() => handleDeleteUser(user.id)}
                           >
-                            <Trash className="mr-2 h-4 w-4" /> Remove
+                            <Trash className="mr-2 h-4 w-4" />
+                            Delete User
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="text-center py-6 text-muted-foreground"
-                  >
-                    No users found matching your search criteria
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                ))}
+                {filteredUsers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8">
+                      No users found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
-
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Invite New User</DialogTitle>
-            <DialogDescription>
-              Send an invitation to a new user to join your organization
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                placeholder="User's full name"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                placeholder="user@example.com"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Select value={formData.role} onValueChange={handleRoleChange}>
-                <SelectTrigger id="role">
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Administrator">Administrator</SelectItem>
-                  <SelectItem value="Finance Manager">
-                    Finance Manager
-                  </SelectItem>
-                  <SelectItem value="Accountant">Accountant</SelectItem>
-                  <SelectItem value="Viewer">Viewer</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Send Invitation
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

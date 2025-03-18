@@ -47,8 +47,11 @@ export const updateSession = async (request: NextRequest) => {
       return NextResponse.redirect(new URL("/sign-in", request.url));
     }
 
-    if (request.nextUrl.pathname === "/" && !error) {
-      return NextResponse.redirect(new URL("/", request.url));
+    // Redirect authenticated users away from auth pages
+    if ((request.nextUrl.pathname === "/sign-in" || 
+         request.nextUrl.pathname === "/sign-up" || 
+         request.nextUrl.pathname === "/forgot-password") && user) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
 
     return response;

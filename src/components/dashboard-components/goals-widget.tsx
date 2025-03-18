@@ -3,16 +3,43 @@
 import { FinancialGoal } from "@/types/financial";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { formatCurrency } from "@/utils/utils";
+import { CurrencyCode, CURRENCY_CONFIG, formatCurrency as formatCurrencyUtil } from "@/lib/utils";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Plus, Target } from "lucide-react";
+import { useContext } from "react";
+import { CurrencyContext } from "@/contexts/currency-context";
 
 interface GoalsWidgetProps {
   goals: FinancialGoal[];
+  currency?: CurrencyCode; // Make currency optional
+  isLoading?: boolean;
 }
 
-export default function GoalsWidget({ goals }: GoalsWidgetProps) {
+export default function GoalsWidget({ 
+  goals, 
+  currency: propCurrency,
+  isLoading = false 
+}: GoalsWidgetProps) {
+  // Use the currency from context if available, otherwise use the prop
+  const currencyContext = useContext(CurrencyContext);
+  const currency = propCurrency || currencyContext?.currency || 'USD';
+
+  const formatCurrency = (value: number) => {
+    if (!currency || !CURRENCY_CONFIG[currency]) {
+      return new Intl.NumberFormat('en-US', {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      }).format(value);
+    }
+    
+    return formatCurrencyUtil(value, currency, {
+      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
+      maximumFractionDigits: 0
+    });
+  };
+
   // Sort goals by progress (lowest to highest)
   const sortedGoals = [...goals]
     .filter(goal => !goal.is_completed)

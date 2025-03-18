@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Card,
   CardContent,
@@ -6,6 +8,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ArrowDownLeft, ArrowUpRight, MoreHorizontal } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { CurrencyCode, CURRENCY_CONFIG, formatCurrency as formatCurrencyUtil } from "@/lib/utils";
+import { useContext } from "react";
+import { CurrencyContext } from "@/contexts/currency-context";
 
 interface Transaction {
   id: string;
@@ -18,64 +24,38 @@ interface Transaction {
 
 interface RecentTransactionsProps {
   transactions?: Transaction[];
+  currency?: CurrencyCode; // Make currency optional
+  isLoading?: boolean;
 }
 
 export default function RecentTransactions({
   transactions = [],
+  currency: propCurrency, // Rename to propCurrency
+  isLoading = false
 }: RecentTransactionsProps) {
+  // Use the currency from context if available, otherwise use the prop
+  const currencyContext = useContext(CurrencyContext);
+  const currency = propCurrency || currencyContext?.currency || 'USD';
+
   // Default transactions if none provided
-  const defaultTransactions: Transaction[] = [
-    {
-      id: "1",
-      description: "Client Payment - ABC Corp",
-      amount: 2500,
-      date: "2023-06-15",
-      type: "income",
-      category: "Sales",
-    },
-    {
-      id: "2",
-      description: "Office Supplies",
-      amount: 125.5,
-      date: "2023-06-14",
-      type: "expense",
-      category: "Office",
-    },
-    {
-      id: "3",
-      description: "Software Subscription",
-      amount: 49.99,
-      date: "2023-06-13",
-      type: "expense",
-      category: "Software",
-    },
-    {
-      id: "4",
-      description: "Client Payment - XYZ Ltd",
-      amount: 1800,
-      date: "2023-06-12",
-      type: "income",
-      category: "Sales",
-    },
-    {
-      id: "5",
-      description: "Utility Bill",
-      amount: 210.75,
-      date: "2023-06-10",
-      type: "expense",
-      category: "Utilities",
-    },
-  ];
+  const defaultTransactions: Transaction[] = [];
 
   const displayTransactions =
     transactions.length > 0 ? transactions : defaultTransactions;
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-    }).format(amount);
+  const formatCurrency = (value: number) => {
+    if (!currency || !CURRENCY_CONFIG[currency]) {
+      return new Intl.NumberFormat('en-US', {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 2,
+      }).format(value);
+    }
+    
+    return formatCurrencyUtil(value, currency, {
+      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 2,
+      maximumFractionDigits: 2
+    });
   };
 
   const formatDate = (dateString: string) => {
@@ -113,9 +93,12 @@ export default function RecentTransactions({
                 </div>
                 <div>
                   <p className="font-medium">{transaction.description}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {transaction.category} • {formatDate(transaction.date)}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      {formatDate(transaction.date)}
+                    </p>
+                    <Badge variant="outline">{transaction.category}</Badge>
+                  </div>
                 </div>
               </div>
               <div

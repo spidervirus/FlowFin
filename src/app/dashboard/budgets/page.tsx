@@ -1,11 +1,13 @@
 import DashboardNavbar from "@/components/dashboard-navbar";
 import { redirect } from "next/navigation";
-import { createClient } from "../../../../supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { createSupabaseClient } from '@/lib/supabase-client';
 import BudgetList from "@/components/budget-components/budget-list";
 import BudgetOverview from "@/components/budget-components/budget-overview";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { CurrencyCode } from "@/lib/utils";
 
 export default async function BudgetsPage() {
   const supabase = await createClient();
@@ -18,73 +20,91 @@ export default async function BudgetsPage() {
     return redirect("/sign-in");
   }
 
-  // Get current month for filtering - format as YYYY-MM-DD to avoid time zone issues
-  const currentDate = new Date();
-  const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-01`;
+  // Get company settings
+  const supabaseClient = createSupabaseClient();
+  const { data: settings } = await supabaseClient
+    .from('company_settings')
+    .select('*')
+    .single();
 
-  // Get active budgets for current month
-  const { data: budgets, error } = await supabase
-    .from("budgets")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("is_active", true)
-    .lte("start_date", currentDate.toISOString().split('T')[0])
-    .gte("end_date", currentDate.toISOString().split('T')[0])
-    .order("created_at", { ascending: false });
+  // Use default currency if settings don't exist
+  const currency = settings?.default_currency as CurrencyCode || 'USD';
 
-  if (error) {
-    console.error("Error fetching budgets:", error);
-  }
-
-  // Get budget categories separately
-  if (budgets && budgets.length > 0) {
-    const budgetIds = budgets.map((budget) => budget.id);
-    const { data: categoriesData, error: categoriesError } = await supabase
-      .from("budget_categories")
-      .select(`
-        id,
-        budget_id,
-        amount,
-        category:categories(id, name, type, color)
-      `)
-      .in("budget_id", budgetIds);
-
-    if (categoriesError) {
-      console.error("Error fetching budget categories:", categoriesError);
-    } else if (categoriesData) {
-      // Add categories to each budget
-      budgets.forEach((budget) => {
-        budget.budget_categories = categoriesData.filter(
-          (item) => item.budget_id === budget.id
-        );
-      });
-    }
-  }
-
-  // Get budget tracking data for current month
+  // Initialize empty arrays for budgets and tracking
+  let budgets: any[] = [];
   let tracking: any[] = [];
-  if (budgets && budgets.length > 0) {
-    const budgetIds = budgets.map((budget) => budget.id);
-    const { data: trackingData, error: trackingError } = await supabase
-      .from("budget_tracking")
-      .select(`
-        *,
-        category:categories(id, name, type, color)
-      `)
-      .in("budget_id", budgetIds)
-      .eq("month", currentMonth);
 
-    if (trackingError) {
-      console.error("Error fetching budget tracking:", trackingError);
-    } else if (trackingData) {
-      tracking = trackingData;
-      
-      // Add tracking data to each budget
-      budgets.forEach((budget) => {
-        budget.tracking = tracking.filter(
-          (item) => item.budget_id === budget.id
-        );
-      });
+  // Only fetch budgets if company settings exist
+  if (settings) {
+    // Get current month for filtering - format as YYYY-MM-DD to avoid time zone issues
+    const currentDate = new Date();
+    const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-01`;
+
+    // Get active budgets for current month
+    const { data: budgetsData, error } = await supabase
+      .from("budgets")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .lte("start_date", currentDate.toISOString().split('T')[0])
+      .gte("end_date", currentDate.toISOString().split('T')[0])
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching budgets:", error);
+    } else if (budgetsData) {
+      budgets = budgetsData;
+    }
+
+    // Get budget categories separately
+    if (budgets && budgets.length > 0) {
+      const budgetIds = budgets.map((budget) => budget.id);
+      const { data: categoriesData, error: categoriesError } = await supabase
+        .from("budget_categories")
+        .select(`
+          id,
+          budget_id,
+          amount,
+          category:categories(id, name, type, color)
+        `)
+        .in("budget_id", budgetIds);
+
+      if (categoriesError) {
+        console.error("Error fetching budget categories:", categoriesError);
+      } else if (categoriesData) {
+        // Add categories to each budget
+        budgets.forEach((budget) => {
+          budget.budget_categories = categoriesData.filter(
+            (item) => item.budget_id === budget.id
+          );
+        });
+      }
+    }
+
+    // Get budget tracking data for current month
+    if (budgets && budgets.length > 0) {
+      const budgetIds = budgets.map((budget) => budget.id);
+      const { data: trackingData, error: trackingError } = await supabase
+        .from("budget_tracking")
+        .select(`
+          *,
+          category:categories(id, name, type, color)
+        `)
+        .in("budget_id", budgetIds)
+        .eq("month", currentMonth);
+
+      if (trackingError) {
+        console.error("Error fetching budget tracking:", trackingError);
+      } else if (trackingData) {
+        tracking = trackingData;
+        
+        // Add tracking data to each budget
+        budgets.forEach((budget) => {
+          budget.tracking = tracking.filter(
+            (item) => item.budget_id === budget.id
+          );
+        });
+      }
     }
   }
 
@@ -112,12 +132,12 @@ export default async function BudgetsPage() {
 
           {/* Budget Overview */}
           <section className="grid grid-cols-1 gap-6">
-            <BudgetOverview budgets={budgets || []} tracking={tracking} />
+            <BudgetOverview budgets={budgets || []} tracking={tracking} currency={currency} />
           </section>
 
           {/* Budget List */}
           <section className="grid grid-cols-1 gap-6">
-            <BudgetList budgets={budgets || []} />
+            <BudgetList budgets={budgets || []} currency={currency} />
           </section>
         </div>
       </main>

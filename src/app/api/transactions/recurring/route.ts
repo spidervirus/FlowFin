@@ -1,5 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../../../supabase/server";
+import { logger } from "../../../../lib/logger";
+
+// Define transaction interface
+interface Transaction {
+  id: string;
+  amount: number;
+  date: string;
+  description: string;
+  is_recurring: boolean;
+  recurrence_frequency?: string;
+  next_occurrence_date?: string;
+  account?: {
+    id: string;
+    name: string;
+  };
+  category?: {
+    id: string;
+    name: string;
+    type: string;
+    color: string;
+  };
+}
 
 // GET endpoint to fetch recurring transactions
 export async function GET(request: NextRequest) {
@@ -10,32 +32,52 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
-    // Get recurring transactions
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { data, error } = await supabase
       .from("transactions")
-      .select("*, category:category_id(id, name, type, color)")
+      .select(`
+        *,
+        account:accounts(id, name),
+        category:categories(id, name, type, color)
+      `)
       .eq("user_id", user.id)
       .eq("is_recurring", true)
-      .order("next_occurrence_date", { ascending: true });
+      .order("date", { ascending: false });
 
     if (error) {
-      console.error("Error fetching recurring transactions:", error);
+      logger.error("Error fetching recurring transactions:", error);
       return NextResponse.json(
-        { error: "Failed to fetch recurring transactions" },
+        { error: "Failed to fetch recurring transactions", details: error.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error("Error processing request:", error);
+    if (!data || data.length === 0) {
+      return NextResponse.json({
+        data: [],
+        message: "No recurring transactions found"
+      });
+    }
+
+    // Validate and sanitize the data
+    const validatedData = data.map(transaction => ({
+      ...transaction,
+      amount: Number(transaction.amount),
+      date: new Date(transaction.date).toISOString().split('T')[0]
+    }));
+
+    return NextResponse.json({
+      data: validatedData,
+      count: validatedData.length
+    });
+  } catch (error: unknown) {
+    logger.error("Error processing recurring transactions request:", error instanceof Error ? error : new Error('Unknown error'));
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error", details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
@@ -110,4 +152,4 @@ export async function DELETE(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

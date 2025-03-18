@@ -1,27 +1,17 @@
+import { CurrencyCode } from '@/lib/utils';
+
 export interface Transaction {
   id: string;
-  date: string;
-  description: string;
-  amount: number;
-  type: "income" | "expense" | "transfer";
-  category: string | {
-    id: string;
-    name: string;
-    type: string;
-    color?: string;
-  };
   account_id: string;
-  status: "pending" | "completed" | "reconciled";
-  notes?: string;
-  is_recurring?: boolean;
-  recurrence_frequency?: "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
-  recurrence_start_date?: string;
-  recurrence_end_date?: string;
-  next_occurrence_date?: string;
-  parent_transaction_id?: string;
-  created_at: string;
-  updated_at: string;
-  user_id: string;
+  date: string;
+  amount: number;
+  type: 'income' | 'expense';
+  description?: string;
+  user_id?: string;
+  category?: Category | string;
+  status?: string;
+  payment_date?: string | null;
+  created_at?: string;
 }
 
 export interface Account {
@@ -42,13 +32,10 @@ export interface Account {
 export interface Category {
   id: string;
   name: string;
-  type: "income" | "expense";
+  type: string;
   color?: string;
-  parent_id?: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  user_id: string;
+  user_id?: string;
+  created_at?: string;
 }
 
 export interface ReportFilter {
@@ -185,4 +172,58 @@ export interface GoalContribution {
   created_at: string;
   updated_at: string;
   transaction?: Transaction;
+}
+
+export interface Invoice {
+  id: string;
+  user_id: string;
+  client_name: string;
+  client_email: string;
+  invoice_number: string;
+  date: string;
+  due_date: string;
+  items: InvoiceItem[];
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  notes?: string;
+  subtotal: number;
+  tax?: number;
+  total: number;
+  currency: CurrencyCode;
+  payment_date?: string | null;
+  created_at?: string;
+}
+
+export interface InvoiceItem {
+  id?: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+}
+
+export interface CompanySettings {
+  id?: string;
+  user_id: string;
+  company_name: string;
+  address: string;
+  country: string;
+  default_currency: CurrencyCode;
+  fiscal_year_start: string;
+  industry: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface RecurringTransaction {
+  id: string;
+  user_id: string;
+  description: string;
+  amount: number;
+  type: 'income' | 'expense';
+  category?: Category | string;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  start_date: string;
+  end_date?: string | null;
+  is_active: boolean;
+  created_at?: string;
 }

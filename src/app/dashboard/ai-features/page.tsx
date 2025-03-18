@@ -4,10 +4,12 @@ import ReceiptScanner from "@/components/ai-features/receipt-scanner";
 import SmartBudgeting from "@/components/ai-features/smart-budgeting";
 import FutureForecasting from "@/components/ai-features/future-forecasting";
 import { redirect } from "next/navigation";
-import { createClient } from "../../../../supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lightbulb, TrendingUp, Sparkles, Receipt } from "lucide-react";
+import { CurrencyCode } from "@/lib/utils";
+import { createSupabaseClient } from '@/lib/supabase-client';
 
 export default async function AIFeaturesPage() {
   const supabase = await createClient();
@@ -19,6 +21,16 @@ export default async function AIFeaturesPage() {
   if (!user) {
     return redirect("/sign-in");
   }
+
+  // Get company settings
+  const supabaseClient = createSupabaseClient();
+  const { data: settings } = await supabaseClient
+    .from('company_settings')
+    .select('*')
+    .single();
+
+  // Use default currency if settings don't exist
+  const currency = settings?.default_currency as CurrencyCode || 'USD';
 
   return (
     <>
@@ -112,19 +124,19 @@ export default async function AIFeaturesPage() {
             </TabsList>
             
             <TabsContent value="spending-insights">
-              <SpendingInsights />
+              <SpendingInsights currency={currency} />
             </TabsContent>
             
             <TabsContent value="smart-budgeting">
-              <SmartBudgeting />
+              <SmartBudgeting currency={currency} />
             </TabsContent>
             
             <TabsContent value="future-forecasting">
-              <FutureForecasting />
+              <FutureForecasting currency={currency} />
             </TabsContent>
             
             <TabsContent value="receipt-scanner">
-              <ReceiptScanner />
+              <ReceiptScanner currency={currency} />
             </TabsContent>
           </Tabs>
         </div>

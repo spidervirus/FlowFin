@@ -19,25 +19,58 @@ export const createClient = async () => {
     supabaseAnonKey,
     {
       cookies: {
-        get(name) {
+        get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name, value, options) {
+        set(name: string, value: string, options: any) {
           try {
             cookieStore.set({ name, value, ...options });
           } catch (error) {
-            // Handle the error or just log it
-            console.error("Cookie setting error:", error);
+            // Handle cookies in edge functions
           }
         },
-        remove(name, options) {
+        remove(name: string, options: any) {
           try {
             cookieStore.set({ name, value: "", ...options });
           } catch (error) {
-            console.error("Cookie removal error:", error);
+            // Handle cookies in edge functions
           }
         },
       },
+    }
+  );
+};
+
+export const createServiceRoleClient = () => {
+  // Get Supabase URL and service role key from environment variables
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  // Check if environment variables are available
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    console.error('Supabase service role environment variables are missing');
+    throw new Error('Supabase service role environment variables are missing. Check your .env.local file.');
+  }
+
+  return createServerClient(
+    supabaseUrl,
+    supabaseServiceRoleKey,
+    {
+      cookies: {
+        get(name: string) {
+          return undefined // Service role client doesn't need cookies
+        },
+        set(name: string, value: string, options: any) {
+          // Service role client doesn't need to set cookies
+        },
+        remove(name: string, options: any) {
+          // Service role client doesn't need to remove cookies
+        },
+      },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
     }
   );
 };

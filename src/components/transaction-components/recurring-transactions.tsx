@@ -18,21 +18,35 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useRouter } from "next/navigation";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 
 interface RecurringTransactionsProps {
-  transactions: Transaction[];
+  transactions: Array<{
+    id: string;
+    description: string;
+    amount: number;
+    type: string;
+    recurrence_frequency: string;
+    next_occurrence_date: string;
+    category: {
+      name: string;
+      type: string;
+    };
+  }>;
+  currency: CurrencyCode;
 }
 
-export default function RecurringTransactions({ transactions }: RecurringTransactionsProps) {
+export default function RecurringTransactions({ transactions, currency }: RecurringTransactionsProps) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
       style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
+      currency,
+      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 

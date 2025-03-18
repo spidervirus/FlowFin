@@ -36,12 +36,14 @@ import {
   Sparkles,
   BarChart3,
   LineChart as LineChartIcon,
-  PieChart
+  PieChart,
+  Loader2
 } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 import { Transaction, Category } from "@/types/financial";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 
 interface MonthlyData {
   month: string;
@@ -88,7 +90,11 @@ interface RecurringTransaction {
   };
 }
 
-export default function FutureForecasting() {
+interface FutureForecastingProps {
+  currency: CurrencyCode;
+}
+
+export default function FutureForecasting({ currency }: FutureForecastingProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -97,6 +103,9 @@ export default function FutureForecasting() {
   const [categoryForecasts, setCategoryForecasts] = useState<CategoryForecast[]>([]);
   const [upcomingExpenses, setUpcomingExpenses] = useState<UpcomingExpense[]>([]);
   const [forecastPeriod, setForecastPeriod] = useState<"3months" | "6months" | "12months">("3months");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
+  const [companySettings, setCompanySettings] = useState<{ default_currency: CurrencyCode } | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -104,9 +113,35 @@ export default function FutureForecasting() {
 
   useEffect(() => {
     if (transactions.length > 0 && categories.length > 0) {
-      generateForecasts();
+      fetchForecasts();
     }
   }, [transactions, categories, forecastPeriod]);
+
+  useEffect(() => {
+    // Get user ID and company settings when component mounts
+    const getUserIdAndSettings = async () => {
+      const supabase = createClient();
+      
+      // Get user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        
+        // Fetch company settings
+        const { data: settingsData, error: settingsError } = await supabase
+          .from('company_settings')
+          .select('*')
+          .single();
+        
+        if (settingsError) {
+          console.error('Error fetching company settings:', settingsError);
+        } else if (settingsData) {
+          setCompanySettings(settingsData);
+        }
+      }
+    };
+    getUserIdAndSettings();
+  }, []);
 
   // Helper function to check if category is an object
   const isCategoryObject = (category: Transaction['category']): category is { id: string; name: string; type: string; color?: string } => {
@@ -161,7 +196,7 @@ export default function FutureForecasting() {
       const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
         .select("*")
-        .eq("is_active", true)  // Only get active categories
+        .eq("is_active", true)
         .order("name");
       
       if (categoriesError) {
@@ -180,176 +215,52 @@ export default function FutureForecasting() {
       
       console.log("Fetching transactions since:", twelveMonthsAgoStr);
       
-      // First try with the join
-      let transactionsData;
-      let transactionsError;
+      // Fetch transactions with category join
+      const { data: transactionsData, error: transactionsError } = await supabase
+        .from("transactions")
+        .select(`
+          *,
+          category:categories(id, name, type, color)
+        `)
+        .gte("date", twelveMonthsAgoStr)
+        .order("date", { ascending: false });
       
-      try {
-        console.log("Attempting to fetch transactions with category join...");
-        const result = await supabase
-          .from("transactions")
-          .select(`
-            *,
-            category:categories(id, name, type, color)
-          `)
-          .gte("date", twelveMonthsAgoStr)
-          .order("date", { ascending: false });
-          
-        transactionsData = result.data;
-        transactionsError = result.error;
-        
-        if (transactionsError) {
-          throw transactionsError;
-        }
-        
-        console.log("Successfully fetched transactions with category join");
-      } catch (err) {
-        console.error("Error with joined transaction query:", err);
-        
-        // Fallback to simpler query if the join fails
-        console.log("Falling back to simple transaction query without join...");
-        try {
-          const fallbackResult = await supabase
-            .from("transactions")
-            .select("*")
-            .gte("date", twelveMonthsAgoStr)
-            .order("date", { ascending: false });
-            
-          transactionsData = fallbackResult.data;
-          transactionsError = fallbackResult.error;
-          
-          if (transactionsError) {
-            throw transactionsError;
-          }
-          
-          console.log("Successfully fetched transactions with fallback query");
-        } catch (fallbackErr) {
-          console.error("Error with fallback transaction query:", fallbackErr);
-          throw new Error(`Failed to fetch transactions: ${fallbackErr instanceof Error ? fallbackErr.message : 'Unknown error'}`);
-        }
+      if (transactionsError) {
+        console.error("Error fetching transactions:", transactionsError);
+        throw new Error(`Failed to fetch transactions: ${transactionsError.message}`);
       }
-      
-      if (!transactionsData || transactionsData.length === 0) {
-        console.warn("No transactions found for the last 12 months");
+
+      // Fetch recurring transactions
+      console.log("Fetching recurring transactions...");
+      const { data: recurringData, error: recurringError } = await supabase
+        .from("recurring_transactions")
+        .select("*")
+        .eq("is_active", true);
+
+      if (recurringError) {
+        console.error("Error fetching recurring transactions:", recurringError);
+        throw new Error(`Failed to fetch recurring transactions: ${recurringError.message}`);
       }
-      
-      // Fetch recurring transactions with a more basic approach
-      console.log("Fetching recurring transactions with basic query...");
-      try {
-        const { data: recurringData, error: recurringError } = await supabase
-          .from("recurring_transactions")
-          .select("*")
-          .eq("is_active", true);
-        
-        if (recurringError) {
-          console.error("Error fetching recurring transactions:", recurringError);
-          throw new Error(`Failed to fetch recurring transactions: ${recurringError.message}`);
-        }
-        
-        if (!recurringData || recurringData.length === 0) {
-          console.warn("No active recurring transactions found");
-          setUpcomingExpenses([]);
-        } else {
-          console.log("Successfully fetched recurring transactions:", recurringData.length);
-          
-          // Log the structure of a recurring transaction to debug
-          if (recurringData.length > 0) {
-            console.log("Sample recurring transaction structure:", JSON.stringify(recurringData[0], null, 2));
-          }
-          
-          // Generate upcoming expenses without relying on category relationships
-          try {
-            const upcoming = generateUpcomingExpensesWithoutCategories(recurringData);
-            setUpcomingExpenses(upcoming);
-          } catch (upcomingError) {
-            console.error("Error generating upcoming expenses:", upcomingError);
-            setUpcomingExpenses([]);
-          }
-        }
-      } catch (recurringFetchError) {
-        console.error("Failed to fetch recurring transactions:", recurringFetchError);
-        setUpcomingExpenses([]);
-      }
-      
-      console.log("Categories data:", categoriesData?.length || 0, "items");
-      console.log("Transactions data:", transactionsData?.length || 0, "items");
-      
-      // Validate and clean transaction data
-      let validTransactions: Transaction[] = [];
-      let invalidCount = 0;
-      
-      if (transactionsData && transactionsData.length > 0) {
-        // Log a sample transaction to debug category structure
-        console.log("Sample transaction:", JSON.stringify(transactionsData[0], null, 2));
-        
-        validTransactions = transactionsData.filter(transaction => {
-          try {
-            // Basic validation
-            if (!transaction.id) {
-              console.warn("Skipping transaction with missing ID");
-              invalidCount++;
-              return false;
-            }
-            
-            if (!transaction.date) {
-              console.warn(`Skipping transaction with missing date: ${transaction.id}`);
-              invalidCount++;
-              return false;
-            }
-            
-            if (typeof transaction.amount !== 'number' && isNaN(Number(transaction.amount))) {
-              console.warn(`Skipping transaction with invalid amount: ${transaction.id}, ${transaction.amount}`);
-              invalidCount++;
-              return false;
-            }
-            
-            // Ensure amount is a number
-            transaction.amount = Number(transaction.amount);
-            
-            // Ensure date is in YYYY-MM-DD format
-            if (!transaction.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-              try {
-                const dateObj = new Date(transaction.date);
-                transaction.date = dateObj.toISOString().split('T')[0];
-              } catch (err) {
-                console.warn(`Skipping transaction with invalid date format: ${transaction.id}, ${transaction.date}`);
-                invalidCount++;
-                return false;
-              }
-            }
-            
-            return true;
-          } catch (err) {
-            console.error(`Error validating transaction ${transaction?.id || 'unknown'}:`, err);
-            invalidCount++;
-            return false;
-          }
-        });
-        
-        if (invalidCount > 0) {
-          console.warn(`Filtered out ${invalidCount} invalid transactions`);
-        }
-      }
-      
-      // Ensure we have arrays even if the data is null
+
+      // Set all the data
       setCategories(categoriesData || []);
-      setTransactions(validTransactions);
-      
-      setIsLoading(false);
+      setTransactions(transactionsData || []);
+      setRecurringTransactions(recurringData || []);
       
       // If we have no transactions, show a warning to the user
-      if (validTransactions.length === 0) {
+      if (!transactionsData || transactionsData.length === 0) {
         setError("No transaction data available for the last 12 months. Please add some transactions to see forecasts.");
       }
     } catch (err) {
       console.error("Error fetching data:", err);
       setError(`Failed to load data: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setIsLoading(false);
-      
       // Set empty arrays for all data to prevent null reference errors
       setCategories([]);
       setTransactions([]);
+      setRecurringTransactions([]);
       setUpcomingExpenses([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -897,12 +808,13 @@ export default function FutureForecasting() {
     }
   };
 
-  const formatCurrency = (amount: number): string => {
+  // Helper function to format currency values
+  const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      currency: companySettings?.default_currency || currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount);
   };
 
@@ -913,6 +825,55 @@ export default function FutureForecasting() {
       day: 'numeric', 
       year: 'numeric' 
     });
+  };
+
+  const fetchForecasts = async () => {
+    if (!userId) {
+      console.error('No user ID available');
+      setError('User ID not found. Please try refreshing the page.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/ai-features/forecasting', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          timeframe: forecastPeriod,
+          userId: userId,
+          transactions: transactions,
+          recurring: recurringTransactions,
+          settings: {
+            default_currency: companySettings?.default_currency || currency
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch forecasts');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setMonthlyData(data.data.monthlyForecasts);
+        setCategoryForecasts(data.data.categoryForecasts);
+        setUpcomingExpenses(data.data.upcomingExpenses);
+      } else {
+        throw new Error(data.error || 'Failed to fetch forecasts');
+      }
+    } catch (error) {
+      console.error('Error fetching forecasts:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch forecasts');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const refreshData = () => {

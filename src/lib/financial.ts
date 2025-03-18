@@ -145,6 +145,18 @@ export async function getTransaction(id: string) {
 }
 
 export async function createTransaction(transaction: Partial<Transaction>) {
+  if (!transaction.account_id || !transaction.amount || !transaction.type) {
+    throw new Error('Missing required transaction fields');
+  }
+
+  if (transaction.amount <= 0) {
+    throw new Error('Transaction amount must be positive');
+  }
+
+  if (!['income', 'expense'].includes(transaction.type)) {
+    throw new Error('Invalid transaction type');
+  }
+
   // Start a transaction to update account balance
   const { data: accountData, error: accountError } = await supabase
     .from("accounts")
@@ -154,12 +166,23 @@ export async function createTransaction(transaction: Partial<Transaction>) {
 
   if (accountError) throw accountError;
 
+  if (!accountData) {
+    throw new Error('Account not found');
+  }
+
   // Calculate new balance
   let newBalance = accountData.balance;
   if (transaction.type === "income") {
     newBalance += transaction.amount;
-  } else if (transaction.type === "expense") {
+  } else {
     newBalance -= transaction.amount;
+    if (newBalance < 0) {
+      console.warn('Account balance will be negative', {
+        accountId: transaction.account_id,
+        currentBalance: accountData.balance,
+        transactionAmount: transaction.amount
+      });
+    }
   }
 
   // Update account balance
@@ -565,7 +588,16 @@ export async function generateCashFlowStatement(
   if (error) throw error;
 
   // Group transactions by date
-  const transactionsByDate = transactions.reduce((acc, transaction) => {
+  interface DailyTransactionSummary {
+    date: string;
+    income: number;
+    expense: number;
+    net: number;
+    transactions: Transaction[];
+    balance?: number;
+  }
+
+  const transactionsByDate = transactions.reduce<Record<string, DailyTransactionSummary>>((acc, transaction) => {
     const date = transaction.date;
 
     if (!acc[date]) {
@@ -591,13 +623,13 @@ export async function generateCashFlowStatement(
   }, {});
 
   // Convert to array and sort by date
-  const cashFlowByDate = Object.values(transactionsByDate).sort((a, b) => {
+  const cashFlowByDate = Object.values(transactionsByDate).sort((a: DailyTransactionSummary, b: DailyTransactionSummary) => {
     return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
 
   // Calculate running balance
   let runningBalance = 0;
-  cashFlowByDate.forEach((day) => {
+  cashFlowByDate.forEach((day: DailyTransactionSummary) => {
     runningBalance += day.net;
     day.balance = runningBalance;
   });
@@ -753,7 +785,7 @@ export async function completeReconciliation(id: string) {
 
   // Check if all items are reconciled
   const allReconciled = reconciliation.items.every(
-    (item) => item.is_reconciled,
+    (item: ReconciliationItem) => item.is_reconciled,
   );
 
   if (!allReconciled) {

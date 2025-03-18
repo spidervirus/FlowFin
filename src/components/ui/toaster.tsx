@@ -1,3 +1,6 @@
+'use client';
+
+import React from 'react';
 import {
   Toast,
   ToastClose,
@@ -5,8 +8,29 @@ import {
   ToastProvider,
   ToastTitle,
   ToastViewport,
-} from "../../components/ui/toast";
-import { useToast } from "../../components/ui/use-toast";
+} from "@/components/ui/toast";
+
+// Define the toast type
+type ToastType = {
+  id: string;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  action?: React.ReactNode;
+  open?: boolean;
+  variant?: 'default' | 'destructive';
+  [key: string]: any;
+};
+
+// Create a simple implementation of useToast that works without dependencies
+function useToast() {
+  const [toasts, setToasts] = React.useState<ToastType[]>([]);
+  
+  return {
+    toasts,
+    toast: () => {},
+    dismiss: () => {},
+  };
+}
 
 export function Toaster() {
   const { toasts } = useToast();

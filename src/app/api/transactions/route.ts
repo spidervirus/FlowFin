@@ -37,39 +37,61 @@ function calculateNextOccurrenceDate(
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
 
-  // Check if user is authenticated
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
     // Get form data
     const formData = await request.formData();
+    
+    // Get user ID from form data or from authenticated user
+    let userId = formData.get("user_id") as string;
+    
+    // If no user ID in form data, try to get from authenticated user
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        userId = user.id;
+      } else {
+        return NextResponse.json({ error: "User ID is required" }, { status: 401 });
+      }
+    }
 
     // Extract transaction data
     const date = formData.get("date") as string;
     const description = formData.get("description") as string;
     const amount = parseFloat(formData.get("amount") as string);
     const type = formData.get("type") as string;
-    const categoryValue = formData.get("category") as string;
-    const category_id = categoryValue === "uncategorized" ? null : categoryValue || null;
+    const category_id = formData.get("category_id") as string | null;
+    // Handle missing or "uncategorized" value as null
+    const effective_category_id = category_id && category_id !== "uncategorized" && category_id.trim() !== "" ? category_id : null;
     const account_id = formData.get("account_id") as string;
     const notes = (formData.get("notes") as string) || null;
     
+    // Log the category information for debugging
+    console.log("Category ID from form:", category_id);
+    console.log("Effective category ID:", effective_category_id);
+    
     // Extract recurring transaction data
     const is_recurring = formData.get("is_recurring") === "on";
-    const recurrence_frequency = is_recurring ? (formData.get("recurrence_frequency") as string) : null;
-    const recurrence_start_date = is_recurring ? (formData.get("recurrence_start_date") as string) : null;
-    const recurrence_end_date = is_recurring ? (formData.get("recurrence_end_date") as string || null) : null;
+    let recurrence_frequency = null;
+    let recurrence_start_date = null;
+    let recurrence_end_date = null;
+    let next_occurrence_date = null;
     
-    // Calculate next occurrence date if this is a recurring transaction
-    const next_occurrence_date = is_recurring && recurrence_frequency 
-      ? calculateNextOccurrenceDate(recurrence_start_date || date, recurrence_frequency)
-      : null;
+    if (is_recurring) {
+      recurrence_frequency = formData.get("recurrence_frequency") as string;
+      recurrence_start_date = formData.get("recurrence_start_date") as string;
+      
+      // Handle optional end date
+      const endDateValue = formData.get("recurrence_end_date");
+      recurrence_end_date = endDateValue && endDateValue !== "" ? endDateValue as string : null;
+      
+      // Calculate next occurrence date if we have valid data
+      if (recurrence_frequency && recurrence_start_date) {
+        next_occurrence_date = calculateNextOccurrenceDate(
+          recurrence_start_date || date, 
+          recurrence_frequency
+        );
+      }
+    }
 
     // Validate required fields
     if (!date || !description || isNaN(amount) || !type || !account_id) {
@@ -124,33 +146,34 @@ export async function POST(request: NextRequest) {
     }
 
     // Then create the transaction
-    const { data, error } = await supabase
+    const transactionData = {
+      date,
+      description,
+      amount,
+      type,
+      category_id: effective_category_id,
+      account_id,
+      status: "completed",
+      notes,
+      is_recurring,
+      recurrence_frequency,
+      recurrence_start_date: recurrence_start_date || date,
+      recurrence_end_date,
+      next_occurrence_date,
+      user_id: userId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    
+    console.log("Inserting transaction with data:", transactionData);
+    
+    // First insert the transaction without selecting
+    const { error: insertError } = await supabase
       .from("transactions")
-      .insert([
-        {
-          date,
-          description,
-          amount,
-          type,
-          category_id,
-          account_id,
-          status: "completed",
-          notes,
-          is_recurring,
-          recurrence_frequency,
-          recurrence_start_date: recurrence_start_date || date,
-          recurrence_end_date,
-          next_occurrence_date,
-          user_id: user.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ])
-      .select("id")
-      .single();
+      .insert([transactionData]);
 
-    if (error) {
-      console.error("Error creating transaction:", error);
+    if (insertError) {
+      console.error("Error creating transaction:", insertError);
 
       // Rollback the account balance update
       await supabase
@@ -162,14 +185,42 @@ export async function POST(request: NextRequest) {
         .eq("id", account_id);
 
       return NextResponse.json(
-        { error: "Failed to create transaction" },
+        { error: "Failed to create transaction: " + insertError.message },
         { status: 500 },
       );
     }
 
-    // Redirect to the transactions page
-    return NextResponse.redirect(
-      new URL(`/dashboard/transactions`, request.url),
+    // Then fetch the created transaction ID
+    const { data, error: fetchError } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("date", date)
+      .eq("description", description)
+      .eq("amount", amount)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (fetchError) {
+      console.error("Error fetching created transaction:", fetchError);
+      return NextResponse.json(
+        { 
+          success: true, 
+          message: "Transaction created successfully, but could not retrieve ID" 
+        },
+        { status: 201 },
+      );
+    }
+
+    // Return success response with the created transaction ID
+    return NextResponse.json(
+      { 
+        success: true, 
+        message: "Transaction created successfully", 
+        data: { id: data.id } 
+      },
+      { status: 201 },
     );
   } catch (error) {
     console.error("Error processing request:", error);
@@ -194,12 +245,12 @@ export async function PUT(request: NextRequest) {
 
   try {
     // Get JSON data
-    const { id, category, ...otherUpdates } = await request.json();
+    const { id, category_id, ...otherUpdates } = await request.json();
     
     // Handle category_id correctly
     const updates = {
       ...otherUpdates,
-      category_id: category === "uncategorized" ? null : category || null
+      category_id: category_id && category_id !== "uncategorized" && category_id.trim() !== "" ? category_id : null
     };
 
     if (!id) {
@@ -315,21 +366,38 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update the transaction
-    const { data, error } = await supabase
+    const { error: updateError } = await supabase
       .from("transactions")
       .update({
         ...updates,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (updateError) {
+      console.error("Error updating transaction:", updateError);
+      return NextResponse.json(
+        { error: "Failed to update transaction: " + updateError.message },
+        { status: 500 },
+      );
+    }
+
+    // Fetch the updated transaction
+    const { data, error: fetchError } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("id", id)
       .eq("user_id", user.id)
-      .select()
       .single();
 
-    if (error) {
+    if (fetchError) {
       return NextResponse.json(
-        { error: "Failed to update transaction" },
-        { status: 500 },
+        { 
+          success: true, 
+          message: "Transaction updated successfully, but could not retrieve updated data" 
+        },
+        { status: 200 },
       );
     }
 

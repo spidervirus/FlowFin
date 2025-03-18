@@ -8,22 +8,10 @@ import tesseract from 'node-tesseract-ocr';
 import { parseReceiptText, ExtractedReceiptData } from '../../../lib/ocr-utils';
 import sharp from 'sharp';
 
-// Import pdf-parse using require
-const pdfParse = require('pdf-parse');
-
 // Add interface for line data
 interface LineData {
   text: string;
   confidence: number;
-}
-
-// Add interface for PDF data
-interface PDFData {
-  text: string;
-  info: any;
-  metadata: any;
-  version: string;
-  numpages: number;
 }
 
 // Function to preprocess image for better OCR results
@@ -130,53 +118,6 @@ async function performRobustOcr(imagePath: string): Promise<{ text: string; line
   }
 }
 
-// Function to extract text from PDF
-async function extractTextFromPdf(pdfBuffer: Buffer): Promise<{ text: string; lines: LineData[] }> {
-  try {
-    console.log('Extracting text from PDF...');
-    const data = await pdfParse(pdfBuffer);
-    
-    // Split text into lines and create line objects with proper typing
-    const lines: LineData[] = data.text.split('\n').map((lineText: string) => ({
-      text: lineText.trim(),
-      confidence: 95 // High confidence for direct PDF text extraction
-    })).filter((line: LineData) => line.text.length > 0);
-    
-    return { text: data.text, lines };
-  } catch (error) {
-    console.error('Error extracting text from PDF:', error);
-    return { text: '', lines: [] };
-  }
-}
-
-// Function to convert PDF page to image
-async function convertPdfPageToImage(pdfBuffer: Buffer): Promise<Buffer | null> {
-  try {
-    console.log('Converting PDF to image...');
-    
-    // First try to extract text
-    const { text } = await extractTextFromPdf(pdfBuffer);
-    
-    // If we got meaningful text, no need to convert to image
-    if (text && text.trim().length > 50) {
-      return null;
-    }
-    
-    // If text extraction failed or returned little text, the PDF might be scanned
-    // Use sharp to convert the first page to an image
-    const image = await sharp(pdfBuffer, { pages: 1 })
-      .grayscale()
-      .normalize()
-      .sharpen()
-      .toBuffer();
-    
-    return image;
-  } catch (error) {
-    console.error('Error converting PDF to image:', error);
-    return null;
-  }
-}
-
 // Function to process receipt and extract data
 async function processReceipt(file: File): Promise<ExtractedReceiptData> {
   const isPdf = file.type === 'application/pdf';
@@ -197,39 +138,30 @@ async function processReceipt(file: File): Promise<ExtractedReceiptData> {
     console.log(`Buffer created successfully, size: ${buffer.length} bytes`);
     
     let text = '';
-    let lines: any[] = [];
+    let lines: LineData[] = [];
     
     if (isPdf) {
       console.log('Processing PDF file...');
       try {
-        // First try to extract text directly from PDF
-        console.log('Attempting direct PDF text extraction...');
-        const pdfResult = await extractTextFromPdf(buffer);
-        text = pdfResult.text;
-        lines = pdfResult.lines;
-        console.log(`PDF text extraction result: ${text.length} characters, ${lines.length} lines`);
+        // Convert PDF to image using sharp
+        console.log('Converting PDF to image...');
+        const image = await sharp(buffer, { pages: 1 })
+          .grayscale()
+          .normalize()
+          .sharpen()
+          .toBuffer();
         
-        // If direct text extraction yields insufficient results, try converting to image
-        if (!text || text.trim().length < 50) {
-          console.log('PDF text extraction returned insufficient text, attempting image conversion...');
-          const imageBuffer = await convertPdfPageToImage(buffer);
-          
-          if (imageBuffer) {
-            console.log('PDF successfully converted to image, proceeding with OCR...');
-            // Save the image buffer to a temporary file
-            const tempDir = os.tmpdir();
-            const imagePath = path.join(tempDir, `receipt_${Date.now()}.png`);
-            await fs.writeFile(imagePath, imageBuffer);
-            
-            // Perform OCR on the image
-            const ocrResult = await performRobustOcr(imagePath);
-            text = ocrResult.text;
-            lines = ocrResult.lines;
-            console.log(`OCR result from converted PDF: ${text.length} characters, ${lines.length} lines`);
-          } else {
-            console.error('Failed to convert PDF to image');
-          }
-        }
+        // Save the image buffer to a temporary file
+        const tempDir = os.tmpdir();
+        const imagePath = path.join(tempDir, `receipt_${Date.now()}.png`);
+        await fs.writeFile(imagePath, image);
+        
+        // Perform OCR on the image
+        console.log('Performing OCR on converted PDF...');
+        const ocrResult = await performRobustOcr(imagePath);
+        text = ocrResult.text;
+        lines = ocrResult.lines;
+        console.log(`OCR result from converted PDF: ${text.length} characters, ${lines.length} lines`);
       } catch (pdfError) {
         console.error('Error processing PDF:', pdfError);
         throw pdfError;
@@ -240,34 +172,10 @@ async function processReceipt(file: File): Promise<ExtractedReceiptData> {
         const imagePath = await preprocessImage(bytes, file.type);
         console.log('Image preprocessing completed, proceeding with OCR...');
         
-        const ocrPromise = new Promise<{ text: string; lines: any[] }>(async (resolve, reject) => {
-          try {
-            const result = await performRobustOcr(imagePath);
-            console.log(`OCR completed: ${result.text.length} characters, ${result.lines.length} lines`);
-            resolve(result);
-          } catch (error) {
-            console.error('OCR processing error:', error);
-            reject(error);
-          }
-        });
-        
-        const ocrTimeoutPromise = new Promise<{ text: string; lines: any[] }>((resolve) => {
-          setTimeout(() => {
-            console.log('OCR processing timeout reached');
-            resolve({ text: '', lines: [] });
-          }, 30000); // Increased timeout to 30 seconds
-        });
-        
-        const result = await Promise.race([ocrPromise, ocrTimeoutPromise]);
-        text = result.text;
-        lines = result.lines;
-        
-        if (text) {
-          console.log('Text extraction successful');
-          console.log('First 200 characters:', text.substring(0, 200));
-        } else {
-          console.log('No text extracted from image');
-        }
+        const ocrResult = await performRobustOcr(imagePath);
+        text = ocrResult.text;
+        lines = ocrResult.lines;
+        console.log(`OCR completed: ${text.length} characters, ${lines.length} lines`);
       } catch (ocrError) {
         console.error('OCR processing failed:', ocrError);
         throw ocrError;
@@ -307,8 +215,36 @@ async function processReceipt(file: File): Promise<ExtractedReceiptData> {
 }
 
 export async function POST(request: NextRequest) {
-  return NextResponse.json({
-    error: 'Receipt scanning feature is coming soon!',
-    status: 'unavailable'
-  }, { status: 503 });
+  try {
+    // Get the form data from the request
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+
+    if (!file) {
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
+
+    // Validate file type
+    const isPdf = file.type === 'application/pdf';
+    const isImage = file.type.startsWith('image/');
+    
+    if (!isPdf && !isImage) {
+      return NextResponse.json(
+        { error: 'Unsupported file type. Only PDF and image files are supported.' },
+        { status: 400 }
+      );
+    }
+
+    // Process the receipt
+    const extractedData = await processReceipt(file);
+
+    // Return the extracted data
+    return NextResponse.json(extractedData);
+  } catch (error) {
+    console.error('Error processing receipt:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unknown error occurred' },
+      { status: 500 }
+    );
+  }
 } 
