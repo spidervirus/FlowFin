@@ -26,8 +26,11 @@ export async function middleware(req: NextRequest) {
   // Get the pathname of the request
   const path = req.nextUrl.pathname;
 
-  // If the path is not in public routes and user is not authenticated, redirect to sign-in
-  if (!publicRoutes.includes(path) && !session) {
+  // Check if the path is a valid route
+  const isValidRoute = publicRoutes.some(route => path === route || path.startsWith('/api/') || path.startsWith('/_next/') || path.startsWith('/static/') || path === '/favicon.ico');
+
+  // If the path is not a valid route and user is not authenticated, redirect to sign-in
+  if (!isValidRoute && !session) {
     return NextResponse.redirect(new URL('/sign-in', req.url));
   }
 
@@ -39,19 +42,13 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
-// Ensure the middleware is only called for relevant paths
+// Update matcher to catch all routes
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
+    // Match all paths except static files and API routes
     '/((?!_next/static|_next/image|favicon.ico|public).*)',
   ],
-}
+};
 
 export async function apiMiddleware(request: NextRequest) {
   const requestStart = Date.now();
