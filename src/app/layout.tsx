@@ -11,7 +11,7 @@ import { Toaster } from "sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "FlowFin - Modern Accounting Software for Businesses",
+  title: "FlowFin - AI-Powered Accounting Software",
   description:
     "Simplify your financial management with our intuitive accounting platform. Track expenses, create invoices, and generate reports with ease.",
 };

@@ -235,22 +235,19 @@ export default function SetupWizard() {
         
       // Only create default categories if user doesn't have any
       if (!existingCategories || existingCategories.length === 0) {
-        // Create default categories via API
-        try {
-          const response = await fetch('/api/categories/default', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ userId: user.id }),
-          });
+        const { error: categoriesError } = await supabase
+          .from('categories')
+          .insert([
+            { name: 'Sales', type: 'income', user_id: user.id },
+            { name: 'Services', type: 'income', user_id: user.id },
+            { name: 'Salary', type: 'expense', user_id: user.id },
+            { name: 'Rent', type: 'expense', user_id: user.id },
+            { name: 'Utilities', type: 'expense', user_id: user.id },
+            { name: 'Office Supplies', type: 'expense', user_id: user.id },
+          ]);
 
-          if (!response.ok) {
-            console.warn('Error creating default categories via API:', await response.text());
-            // Continue anyway, as this is not critical
-          }
-        } catch (error) {
-          console.warn('Error creating default categories:', error);
+        if (categoriesError) {
+          console.warn('Error creating default categories:', categoriesError);
           // Continue anyway, as this is not critical
         }
       }
