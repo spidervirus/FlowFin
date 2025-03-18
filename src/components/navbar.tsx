@@ -81,18 +81,18 @@ export default function Navbar() {
           >
             Features
           </Link>
-          <Link
+          {/* <Link
             href="/pricing"
             className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
           >
             Pricing
-          </Link>
-          <Link
+          </Link> */}
+          {/* <Link
             href="/resources"
             className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
           >
             Resources
-          </Link>
+          </Link> */}
           <Link
             href="/about"
             className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
@@ -114,17 +114,17 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Link
+              {/* <Link
                 href="/sign-in"
                 className="items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
               >
                 Sign In
-              </Link>
+              </Link> */}
               <Link
-                href="/sign-up"
+                href="#waitlist"
                 className="items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
               >
-                Get Started
+                Join Waitlist
               </Link>
             </>
           )}
@@ -151,18 +151,18 @@ export default function Navbar() {
           >
             Features
           </Link>
-          <Link
+          {/* <Link
             href="/pricing"
             className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
           >
             Pricing
-          </Link>
-          <Link
+          </Link> */}
+          {/* <Link
             href="/resources"
             className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
           >
             Resources
-          </Link>
+          </Link> */}
           <Link
             href="/about"
             className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
@@ -175,6 +175,14 @@ export default function Navbar() {
               className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
             >
               Dashboard
+            </Link>
+          )}
+          {!user && (
+            <Link
+              href="#waitlist"
+              className="block px-3 py-2 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Join Waitlist
             </Link>
           )}
         </div>
