@@ -1,3 +1,5 @@
+'use client';
+
 import Footer from "@/components/footer";
 import Navbar from "@/components/navbar";
 import CountdownTimer from "@/components/countdown-timer";
@@ -15,13 +17,13 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 
-export default async function Home() {
+export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
       <Navbar />
       
       {/* Coming Soon Hero Section */}
-      <section className="py-20 bg-gradient-to-br from-blue-50 via-white to-blue-50 relative overflow-hidden">
+      <section id="waitlist" className="py-20 bg-gradient-to-br from-blue-50 via-white to-blue-50 relative overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute inset-0" style={{
