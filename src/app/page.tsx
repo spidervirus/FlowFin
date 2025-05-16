@@ -4,6 +4,7 @@ import Footer from "@/components/footer";
 import Navbar from "@/components/navbar";
 import CountdownTimer from "../components/countdown-timer";
 import WaitlistForm from "../components/waitlist-form";
+import Script from 'next/script';
 import {
   ArrowUpRight,
   BarChart3,
@@ -130,6 +131,21 @@ export default function Home() {
       </section>
 
       {/* <Footer /> */}
+
+      {/* Tawk.to Script */}
+      <Script id="tawkto-script" strategy="lazyOnload">
+        {`
+          var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+          (function(){
+            var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
+            s1.async=true;
+            s1.src='https://embed.tawk.to/6827721e6392a3190c77cf0e/1ird1bibr';
+            s1.charset='UTF-8';
+            s1.setAttribute('crossorigin','*');
+            s0.parentNode.insertBefore(s1,s0);
+          })();
+        `}
+      </Script>
     </div>
   );
 }
