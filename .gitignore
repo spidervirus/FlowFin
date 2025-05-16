@@ -50,3 +50,27 @@ node_modules/
 .git
 
 .github/
+
+# Add these patterns to remove duplicates
+scripts/*[[:space:]]2.js
+scripts/*[[:space:]]2.ts
+
+# Added by Claude Task Master
+# Logs
+logs
+*.log
+dev-debug.log
+# Dependency directories
+# Environment variables
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+# Task files
+tasks.json
+tasks/ 

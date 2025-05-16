@@ -99,4 +99,4 @@ The following fields were added to the transactions table:
 - `POST /api/transactions`: Creates a new transaction, with support for recurring options
 - `GET /api/transactions/recurring`: Fetches all recurring transactions
 - `DELETE /api/transactions/recurring`: Deletes a recurring transaction
-- `GET /api/cron/process-recurring-transactions`: Processes due recurring transactions (called by cron job) 
+- `GET /api/cron/process-recurring-transactions`: Processes due recurring transactions (called by cron job)

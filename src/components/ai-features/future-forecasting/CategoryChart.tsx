@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo } from "react";
 import {
   BarChart,
   Bar,
@@ -8,18 +8,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
-} from 'recharts';
-import { formatCurrency, CurrencyCode } from '@/lib/utils';
-
-interface CategoryForecast {
-  category: string;
-  categoryId: string;
-  color: string;
-  current: number;
-  forecast: number;
-  change: number;
-  trend: "up" | "down" | "stable";
-}
+} from "recharts";
+import { formatCurrency, CurrencyCode } from "@/lib/utils";
+import { CategoryForecast } from "@/types/forecasting";
 
 interface CategoryChartProps {
   data: CategoryForecast[];
@@ -36,13 +27,15 @@ function CategoryChartComponent({ data, currencyCode }: CategoryChartProps) {
           margin={{ top: 20, right: 30, left: 100, bottom: 10 }}
         >
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis 
-            type="number" 
-            tickFormatter={(value) => formatCurrency(value, currencyCode, { compact: true })} 
+          <XAxis
+            type="number"
+            tickFormatter={(value) =>
+              formatCurrency(value, currencyCode, { compact: true })
+            }
           />
           <YAxis type="category" dataKey="category" width={100} />
-          <Tooltip 
-            formatter={(value) => formatCurrency(Number(value), currencyCode)} 
+          <Tooltip
+            formatter={(value) => formatCurrency(Number(value), currencyCode)}
             labelFormatter={(label) => `Category: ${label}`}
           />
           <Legend />
@@ -55,4 +48,4 @@ function CategoryChartComponent({ data, currencyCode }: CategoryChartProps) {
 }
 
 const CategoryChart = memo(CategoryChartComponent);
-export default CategoryChart; 
+export default CategoryChart;

@@ -49,24 +49,28 @@ The Receipt Scanner feature uses Tesseract OCR (an open source OCR engine) to ex
 ### Installation
 
 1. Clone the repository:
+
    ```
    git clone https://github.com/yourusername/flowfin.git
    cd flowfin
    ```
 
 2. Install dependencies:
+
    ```
    npm install
    ```
 
 3. Set up environment variables:
    Create a `.env.local` file with the following:
+
    ```
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    ```
 
 4. Run the development server:
+
    ```
    npm run dev
    ```

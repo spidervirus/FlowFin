@@ -1,7 +1,13 @@
 "use client";
 
 import { FinancialGoal } from "@/types/financial";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,53 +19,72 @@ interface GoalsOverviewProps {
   currency: CurrencyCode;
 }
 
-export default function GoalsOverview({ goals = [], currency }: GoalsOverviewProps) {
+export default function GoalsOverview({
+  goals = [],
+  currency,
+}: GoalsOverviewProps) {
   const [activeTab, setActiveTab] = useState("all");
-  
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
       style: "currency",
       currency,
-      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
+      minimumFractionDigits:
+        CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
       maximumFractionDigits: 0,
     }).format(value);
   };
-  
+
   // Filter goals based on active tab
-  const filteredGoals = goals.filter(goal => {
+  const filteredGoals = goals.filter((goal) => {
     if (activeTab === "all") return true;
     if (activeTab === "completed") return goal.is_completed;
-    if (activeTab === "in-progress") return !goal.is_completed && goal.current_amount > 0;
+    if (activeTab === "in-progress")
+      return !goal.is_completed && goal.current_amount > 0;
     if (activeTab === "not-started") return goal.current_amount === 0;
     return true;
   });
-  
+
   // Calculate total stats
-  const totalTargetAmount = goals.reduce((sum, goal) => sum + goal.target_amount, 0);
-  const totalCurrentAmount = goals.reduce((sum, goal) => sum + goal.current_amount, 0);
-  const totalPercentage = totalTargetAmount > 0 ? (totalCurrentAmount / totalTargetAmount) * 100 : 0;
-  
+  const totalTargetAmount = goals.reduce(
+    (sum, goal) => sum + goal.target_amount,
+    0,
+  );
+  const totalCurrentAmount = goals.reduce(
+    (sum, goal) => sum + goal.current_amount,
+    0,
+  );
+  const totalPercentage =
+    totalTargetAmount > 0 ? (totalCurrentAmount / totalTargetAmount) * 100 : 0;
+
   // Count goals by status
-  const completedGoals = goals.filter(goal => goal.is_completed).length;
-  const inProgressGoals = goals.filter(goal => !goal.is_completed && goal.current_amount > 0).length;
-  const notStartedGoals = goals.filter(goal => goal.current_amount === 0).length;
-  
+  const completedGoals = goals.filter((goal) => goal.is_completed).length;
+  const inProgressGoals = goals.filter(
+    (goal) => !goal.is_completed && goal.current_amount > 0,
+  ).length;
+  const notStartedGoals = goals.filter(
+    (goal) => goal.current_amount === 0,
+  ).length;
+
   // Get upcoming goals (closest target date that's not completed)
   const upcomingGoals = goals
-    .filter(goal => !goal.is_completed)
-    .sort((a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime())
+    .filter((goal) => !goal.is_completed)
+    .sort(
+      (a, b) =>
+        new Date(a.target_date).getTime() - new Date(b.target_date).getTime(),
+    )
     .slice(0, 3);
-  
+
   // Format date to readable format
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
-  
+
   // Calculate days remaining for a goal
   const getDaysRemaining = (targetDate: string) => {
     const today = new Date();
@@ -68,7 +93,7 @@ export default function GoalsOverview({ goals = [], currency }: GoalsOverviewPro
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays > 0 ? diffDays : 0;
   };
-  
+
   return (
     <Card>
       <CardHeader>
@@ -81,7 +106,9 @@ export default function GoalsOverview({ goals = [], currency }: GoalsOverviewPro
         {goals.length === 0 ? (
           <div className="text-center py-6">
             <Target className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground mb-2">You don't have any active goals</p>
+            <p className="text-muted-foreground mb-2">
+              You don&apos;t have any active goals
+            </p>
             <p className="text-sm text-muted-foreground mb-4">
               Create a goal to start tracking your savings progress
             </p>
@@ -91,7 +118,9 @@ export default function GoalsOverview({ goals = [], currency }: GoalsOverviewPro
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-blue-700">Total Savings</h3>
+                  <h3 className="text-sm font-medium text-blue-700">
+                    Total Savings
+                  </h3>
                   <Target className="h-4 w-4 text-blue-700" />
                 </div>
                 <p className="text-2xl font-bold text-blue-800 mb-1">
@@ -100,46 +129,63 @@ export default function GoalsOverview({ goals = [], currency }: GoalsOverviewPro
                 <p className="text-xs text-blue-600">
                   of {formatCurrency(totalTargetAmount)} target
                 </p>
-                <Progress 
-                  value={totalPercentage} 
+                <Progress
+                  value={totalPercentage}
                   className="h-1.5 mt-2 bg-blue-200"
                 />
               </div>
-              
+
               <div className="bg-green-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-green-700">Goals Status</h3>
+                  <h3 className="text-sm font-medium text-green-700">
+                    Goals Status
+                  </h3>
                   <CheckCircle className="h-4 w-4 text-green-700" />
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between">
                     <span className="text-xs text-green-700">Completed</span>
-                    <span className="text-xs font-medium text-green-800">{completedGoals}</span>
+                    <span className="text-xs font-medium text-green-800">
+                      {completedGoals}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-xs text-green-700">In Progress</span>
-                    <span className="text-xs font-medium text-green-800">{inProgressGoals}</span>
+                    <span className="text-xs font-medium text-green-800">
+                      {inProgressGoals}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-xs text-green-700">Not Started</span>
-                    <span className="text-xs font-medium text-green-800">{notStartedGoals}</span>
+                    <span className="text-xs font-medium text-green-800">
+                      {notStartedGoals}
+                    </span>
                   </div>
                   <div className="flex justify-between pt-1 border-t border-green-200 mt-1">
-                    <span className="text-xs font-medium text-green-700">Total</span>
-                    <span className="text-xs font-medium text-green-800">{goals.length}</span>
+                    <span className="text-xs font-medium text-green-700">
+                      Total
+                    </span>
+                    <span className="text-xs font-medium text-green-800">
+                      {goals.length}
+                    </span>
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-purple-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-purple-700">Upcoming Deadlines</h3>
+                  <h3 className="text-sm font-medium text-purple-700">
+                    Upcoming Deadlines
+                  </h3>
                   <CalendarClock className="h-4 w-4 text-purple-700" />
                 </div>
                 {upcomingGoals.length > 0 ? (
                   <div className="space-y-2">
                     {upcomingGoals.map((goal) => (
-                      <div key={goal.id} className="flex justify-between items-center">
+                      <div
+                        key={goal.id}
+                        className="flex justify-between items-center"
+                      >
                         <span className="text-xs text-purple-700 truncate max-w-[120px]">
                           {goal.name}
                         </span>
@@ -150,19 +196,25 @@ export default function GoalsOverview({ goals = [], currency }: GoalsOverviewPro
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-purple-700">No upcoming deadlines</p>
+                  <p className="text-xs text-purple-700">
+                    No upcoming deadlines
+                  </p>
                 )}
               </div>
             </div>
-            
-            <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+
+            <Tabs
+              defaultValue="all"
+              value={activeTab}
+              onValueChange={setActiveTab}
+            >
               <TabsList className="mb-4">
                 <TabsTrigger value="all">All Goals</TabsTrigger>
                 <TabsTrigger value="in-progress">In Progress</TabsTrigger>
                 <TabsTrigger value="completed">Completed</TabsTrigger>
                 <TabsTrigger value="not-started">Not Started</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value={activeTab}>
                 <div className="space-y-4">
                   {filteredGoals.length === 0 ? (
@@ -171,11 +223,12 @@ export default function GoalsOverview({ goals = [], currency }: GoalsOverviewPro
                     </p>
                   ) : (
                     filteredGoals.slice(0, 3).map((goal) => {
-                      const percentage = goal.target_amount > 0 
-                        ? (goal.current_amount / goal.target_amount) * 100 
-                        : 0;
+                      const percentage =
+                        goal.target_amount > 0
+                          ? (goal.current_amount / goal.target_amount) * 100
+                          : 0;
                       const daysRemaining = getDaysRemaining(goal.target_date);
-                      
+
                       return (
                         <div key={goal.id} className="border rounded-lg p-4">
                           <div className="flex justify-between items-start mb-2">
@@ -194,9 +247,9 @@ export default function GoalsOverview({ goals = [], currency }: GoalsOverviewPro
                               </p>
                             </div>
                           </div>
-                          
+
                           <Progress value={percentage} className="h-2 mb-2" />
-                          
+
                           <div className="flex justify-between text-xs text-muted-foreground">
                             <span>
                               <Clock className="h-3 w-3 inline mr-1" />
@@ -210,7 +263,7 @@ export default function GoalsOverview({ goals = [], currency }: GoalsOverviewPro
                       );
                     })
                   )}
-                  
+
                   {filteredGoals.length > 3 && (
                     <p className="text-center text-sm text-muted-foreground">
                       Showing 3 of {filteredGoals.length} goals
@@ -224,4 +277,4 @@ export default function GoalsOverview({ goals = [], currency }: GoalsOverviewPro
       </CardContent>
     </Card>
   );
-} 
+}

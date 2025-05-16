@@ -9,7 +9,11 @@ import {
 } from "@/components/ui/card";
 import { ArrowDownLeft, ArrowUpRight, MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { CurrencyCode, CURRENCY_CONFIG, formatCurrency as formatCurrencyUtil } from "@/lib/utils";
+import {
+  CurrencyCode,
+  CURRENCY_CONFIG,
+  formatCurrency as formatCurrencyUtil,
+} from "@/lib/utils";
 import { useContext } from "react";
 import { CurrencyContext } from "@/contexts/currency-context";
 
@@ -31,11 +35,11 @@ interface RecentTransactionsProps {
 export default function RecentTransactions({
   transactions = [],
   currency: propCurrency, // Rename to propCurrency
-  isLoading = false
+  isLoading = false,
 }: RecentTransactionsProps) {
   // Use the currency from context if available, otherwise use the prop
   const currencyContext = useContext(CurrencyContext);
-  const currency = propCurrency || currencyContext?.currency || 'USD';
+  const currency = propCurrency || currencyContext?.currency || "USD";
 
   // Default transactions if none provided
   const defaultTransactions: Transaction[] = [];
@@ -45,16 +49,17 @@ export default function RecentTransactions({
 
   const formatCurrency = (value: number) => {
     if (!currency || !CURRENCY_CONFIG[currency]) {
-      return new Intl.NumberFormat('en-US', {
+      return new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "USD",
         maximumFractionDigits: 2,
       }).format(value);
     }
-    
+
     return formatCurrencyUtil(value, currency, {
-      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 2,
-      maximumFractionDigits: 2
+      minimumFractionDigits:
+        CURRENCY_CONFIG[currency].minimumFractionDigits ?? 2,
+      maximumFractionDigits: 2,
     });
   };
 

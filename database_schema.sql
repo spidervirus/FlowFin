@@ -63,6 +63,21 @@ CREATE TABLE IF NOT EXISTS organization_users (
   PRIMARY KEY (organization_id, user_id)
 );
 
+-- Company Settings Table
+CREATE TABLE IF NOT EXISTS company_settings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  default_currency TEXT DEFAULT 'USD',
+  fiscal_year_start DATE,
+  tax_rate DECIMAL(5,2) DEFAULT 0,
+  invoice_prefix TEXT,
+  invoice_number_format TEXT,
+  payment_terms TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(organization_id)
+);
+
 -- Financial Management Tables
 CREATE TABLE IF NOT EXISTS accounts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -103,6 +118,9 @@ CREATE TABLE IF NOT EXISTS transactions (
   account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'reconciled')),
   notes TEXT,
+  is_recurring BOOLEAN DEFAULT false,
+  recurrence_frequency TEXT CHECK (recurrence_frequency IN ('daily', 'weekly', 'monthly', 'yearly')),
+  next_occurrence_date DATE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
@@ -261,25 +279,69 @@ CREATE TABLE IF NOT EXISTS receipt_items (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
 );
 
--- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category_id);
+-- Create enum type for quote status
+CREATE TYPE quote_status AS ENUM ('draft', 'sent', 'accepted', 'rejected', 'expired');
+
+-- Quotes Management Tables
+CREATE TABLE IF NOT EXISTS quote_templates (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  content JSONB NOT NULL,
+  is_default BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS quotes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE RESTRICT,
+  quote_number TEXT NOT NULL,
+  date TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  expiry_date TIMESTAMP WITH TIME ZONE,
+  status quote_status NOT NULL DEFAULT 'draft',
+  subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
+  tax_rate DECIMAL(5,2),
+  tax_amount DECIMAL(12,2),
+  discount_rate DECIMAL(5,2),
+  discount_amount DECIMAL(12,2),
+  total DECIMAL(12,2) NOT NULL DEFAULT 0,
+  terms TEXT,
+  notes TEXT,
+  template_id UUID REFERENCES quote_templates(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, quote_number)
+);
+
+CREATE TABLE IF NOT EXISTS quote_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+  description TEXT NOT NULL,
+  quantity DECIMAL(12,2) NOT NULL DEFAULT 1,
+  unit_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
-
-CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
-CREATE INDEX IF NOT EXISTS idx_categories_parent_id ON categories(parent_id);
-
-CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id);
-
-CREATE INDEX IF NOT EXISTS idx_budgets_user_id ON budgets(user_id);
-CREATE INDEX IF NOT EXISTS idx_budget_tracking_budget_id ON budget_tracking(budget_id);
-
-CREATE INDEX IF NOT EXISTS idx_financial_goals_user_id ON financial_goals(user_id);
-CREATE INDEX IF NOT EXISTS idx_goal_contributions_goal_id ON goal_contributions(goal_id);
-
-CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices(user_id);
-CREATE INDEX IF NOT EXISTS idx_invoices_account_id ON invoices(account_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_budgets_user ON budgets(user_id);
+CREATE INDEX IF NOT EXISTS idx_budget_tracking_month ON budget_tracking(month);
+CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(date);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+CREATE INDEX IF NOT EXISTS idx_goals_user ON financial_goals(user_id);
+CREATE INDEX IF NOT EXISTS idx_goals_category ON financial_goals(category_id);
+CREATE INDEX IF NOT EXISTS idx_quotes_user_id ON quotes(user_id);
+CREATE INDEX IF NOT EXISTS idx_quotes_customer_id ON quotes(customer_id);
+CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status);
+CREATE INDEX IF NOT EXISTS idx_quote_items_quote_id ON quote_items(quote_id);
+CREATE INDEX IF NOT EXISTS idx_quote_templates_user_id ON quote_templates(user_id);
 
 -- Enable Row Level Security
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
@@ -302,33 +364,3 @@ ALTER TABLE goal_contributions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoice_payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE receipt_items ENABLE ROW LEVEL SECURITY;
-
--- Create updated_at triggers function
-CREATE OR REPLACE FUNCTION update_modified_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Apply updated_at triggers to all tables
-CREATE TRIGGER update_user_profiles_modtime
-    BEFORE UPDATE ON user_profiles
-    FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER update_organizations_modtime
-    BEFORE UPDATE ON organizations
-    FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER update_roles_modtime
-    BEFORE UPDATE ON roles
-    FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER update_accounts_modtime
-    BEFORE UPDATE ON accounts
-    FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER update_categories_modtime
-    BEFORE UPDATE ON categories
-    FOR EACH

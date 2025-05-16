@@ -1,371 +1,232 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { CurrencyCode } from "@/lib/utils";
+import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Plus, Search, Filter, Edit, Trash, ExternalLink } from "lucide-react";
+  Plus,
+  Pencil,
+  Trash2,
+  Wallet,
+  Building2,
+  ArrowUpRight,
+  ArrowDownRight,
+} from "lucide-react";
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
-import { createSupabaseClient } from "@/lib/supabase-client";
-import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DashboardWrapper from "../dashboard-wrapper";
+import { CompanySettings } from "@/types/financial";
+import type { Database } from "@/types/supabase";
 
-// Define a minimal user type for our purposes
-interface MinimalUser {
+interface PageAccount {
   id: string;
-  email?: string;
-}
-
-// Define account type
-interface Account {
-  id: string;
+  user_id: string;
   name: string;
   type: string;
   balance: number;
-  currency: string;
-  institution?: string;
-  account_number?: string;
-  notes?: string;
-  user_id: string;
+  currency: CurrencyCode;
+  is_active: boolean;
+  institution?: string | null;
+  account_number?: string | null;
+  notes?: string | null;
+  code?: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export default function AccountsPage() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [user, setUser] = useState<MinimalUser | null>(null);
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currency, setCurrency] = useState<CurrencyCode>('USD');
-  const [assets, setAssets] = useState(0);
-  const [liabilities, setLiabilities] = useState(0);
-  const [netWorth, setNetWorth] = useState(0);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [accounts, setAccounts] = useState<PageAccount[]>([]);
+  const [currency, setCurrency] = useState<CurrencyCode>("USD");
+  const [companySettings, setCompanySettings] =
+    useState<CompanySettings | null>(null);
+  const [deletingAccountId, setDeletingAccountId] = useState<string | null>(
+    null,
+  );
 
-  // Function to force refresh data
-  const refreshData = () => {
-    console.log("Forcing data refresh");
-    setRefreshKey(prevKey => prevKey + 1);
-  };
-  
-  // Function to directly fetch accounts data for a user
-  const fetchAccountsForUser = async (userId: string) => {
-    console.log("Directly fetching accounts for user:", userId);
+  const supabase = createClient();
+
+  const fetchData = async () => {
     try {
-      const supabaseClient = createSupabaseClient();
-      const { data, error } = await supabaseClient
-        .from("accounts")
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Please sign in to view accounts");
+        return;
+      }
+
+      // Fetch company settings
+      const { data: settings, error: settingsError } = await supabase
+        .from("company_settings")
         .select("*")
-        .eq("user_id", userId)
-        .order("name");
-        
-      if (error) {
-        console.error("Error in direct fetch:", error);
-        return [];
+        .eq("user_id", user.id)
+        .single();
+
+      if (settingsError) {
+        if (settingsError.code !== 'PGRST116') {
+          toast.error("Error fetching company settings: " + settingsError.message);
+        }
       }
-      
-      console.log(`Direct fetch returned ${data?.length || 0} accounts:`, data);
-      return data || [];
-    } catch (err) {
-      console.error("Exception in direct fetch:", err);
-      return [];
+
+      if (settings) {
+        setCompanySettings(settings);
+        if (settings.default_currency) {
+          setCurrency(settings.default_currency);
+        }
+      } else {
+        setCurrency("USD");
+      }
+
+      // Fetch accounts from chart_of_accounts
+      const { data: accountsData, error: accountsError } = await supabase
+        .from("chart_of_accounts")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("name", { ascending: true });
+
+      if (accountsError) {
+        toast.error("Error fetching accounts: " + accountsError.message);
+        return;
+      }
+
+      // Transform the data to match Account type
+      const transformedAccounts: PageAccount[] = (accountsData || []).map((account: any) => ({
+        ...account,
+        balance: account.balance === null || account.balance === undefined ? 0 : Number(account.balance),
+        currency: account.currency as CurrencyCode,
+      }));
+
+      setAccounts(transformedAccounts);
+    } catch (error) {
+      if (error instanceof Error) {
+        toast.error("Error fetching data: " + error.message);
+      } else {
+        toast.error("An unknown error occurred while fetching data");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Function to create default accounts for new users
-  const createDefaultAccounts = async (userId: string) => {
-    const supabaseClient = createSupabaseClient();
-    
-    // Check if user already has any accounts
-    const { data: existingAccounts } = await supabaseClient
-      .from("accounts")
-      .select("id")
-      .eq("user_id", userId)
-      .limit(1);
-
-    if (existingAccounts && existingAccounts.length > 0) {
-      return; // User already has accounts, don't create defaults
-    }
-
-    // Create default accounts
-    const defaultAccounts = [
-      {
-        name: "Cash on Hand",
-        type: "cash",
-        balance: 0,
-        currency: currency,
-        user_id: userId,
-        notes: "Physical cash and other liquid assets"
-      },
-      {
-        name: "Cash at Bank",
-        type: "checking",
-        balance: 0,
-        currency: currency,
-        user_id: userId,
-        notes: "Primary bank account"
-      }
-    ];
-
-    const { error } = await supabaseClient
-      .from("accounts")
-      .insert(defaultAccounts);
-
-    if (error) {
-      console.error("Error creating default accounts:", error);
-    } else {
-      // Refresh the accounts list
-      refreshData();
-    }
-  };
-
-  // Force a refresh when the component mounts or when returning to this page
   useEffect(() => {
-    console.log("Accounts page mounted or pathname changed");
-    
-    // Check if we need to refresh based on localStorage flag
-    const needsRefresh = localStorage.getItem("accountsNeedRefresh") === "true";
-    if (needsRefresh) {
-      console.log("Found accountsNeedRefresh flag, clearing and refreshing");
-      // Clear the flag
-      localStorage.removeItem("accountsNeedRefresh");
-      
-      // If we have a user ID in localStorage, do a direct fetch
-      const userId = localStorage.getItem("currentUserId");
-      const userDataStr = localStorage.getItem("userData");
-      let effectiveUserId = userId;
-      
-      if (!effectiveUserId && userDataStr) {
-        try {
-          const userData = JSON.parse(userDataStr);
-          if (userData?.user?.id) {
-            effectiveUserId = userData.user.id;
-          }
-        } catch (e) {
-          console.error("Error parsing userData:", e);
-        }
-      }
-      
-      if (effectiveUserId) {
-        console.log("Doing direct fetch for user:", effectiveUserId);
-        // Do a direct fetch and update the accounts
-        fetchAccountsForUser(effectiveUserId).then(freshAccounts => {
-          if (freshAccounts && freshAccounts.length > 0) {
-            console.log("Direct fetch successful, updating accounts:", freshAccounts);
-            setAccounts(freshAccounts as unknown as Account[]);
-            
-            // Calculate totals
-            const assetsTotal = freshAccounts
-              .filter((a: any) => ["checking", "savings", "investment", "cash"].includes(a.type))
-              .reduce((sum: number, a: any) => sum + (parseFloat(a.balance) || 0), 0);
-            
-            const liabilitiesTotal = freshAccounts
-              .filter((a: any) => ["credit"].includes(a.type))
-              .reduce((sum: number, a: any) => sum + (parseFloat(a.balance) || 0), 0);
-            
-            setAssets(assetsTotal);
-            setLiabilities(liabilitiesTotal);
-            setNetWorth(assetsTotal - liabilitiesTotal);
-          }
-        });
-      }
-    }
-    
-    // Force a refresh when the component mounts
-    refreshData();
-    
-  }, [pathname]);
-
-  useEffect(() => {
-    async function fetchData() {
-      console.log("Fetching accounts data, refreshKey:", refreshKey);
-      setLoading(true);
-      
-      try {
-        // Check if user is authenticated
-        const supabaseClient = createSupabaseClient();
-        const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-        
-        let effectiveUser: MinimalUser | null = user ? { id: user.id, email: user.email } : null;
-        
-        // If no user from Supabase, try to get from localStorage
-        if (!effectiveUser) {
-          console.log("No user from Supabase, checking localStorage");
-          
-          // Try to get user ID from localStorage
-          const userId = localStorage.getItem("currentUserId");
-          const userDataStr = localStorage.getItem("userData");
-          let userDataId = null;
-          
-          if (userDataStr) {
-            try {
-              const userData = JSON.parse(userDataStr);
-              if (userData?.user?.id) {
-                userDataId = userData.user.id;
-              }
-            } catch (e) {
-              console.error("Error parsing userData:", e);
-            }
-          }
-          
-          if (userId || userDataId) {
-            // Create a minimal user object with the ID
-            effectiveUser = {
-              id: userId || userDataId || "",
-              email: "user@example.com" // Placeholder email
-            };
-            console.log("Using user ID from localStorage:", effectiveUser.id);
-            
-            // Try to refresh the session
-            try {
-              supabaseClient.auth.refreshSession();
-            } catch (refreshError) {
-              console.error("Error refreshing session:", refreshError);
-            }
-          } else {
-            console.log("No user ID found in localStorage, redirecting to sign-in");
-            router.push('/sign-in');
-            return;
-          }
-        }
-        
-        setUser(effectiveUser);
-        
-        // Get company settings
-        const { data: settingsData, error: settingsError } = await supabaseClient
-          .from('company_settings')
-          .select('*')
-          .eq('user_id', effectiveUser.id)
-          .single();
-        
-        if (settingsError) {
-          console.error("Error fetching company settings:", settingsError);
-        }
-        
-        // Set currency from settings or default to USD
-        if (settingsData?.default_currency) {
-          setCurrency(settingsData.default_currency as CurrencyCode);
-        }
-        
-        // Fetch accounts from the database
-        console.log("Fetching accounts for user ID:", effectiveUser.id);
-        
-        const { data: accountsData, error } = await supabaseClient
-          .from("accounts")
-          .select("*")
-          .eq("user_id", effectiveUser.id)
-          .order("name");
-        
-        if (error) {
-          console.error("Error fetching accounts:", error);
-          return;
-        }
-        
-        console.log(`Fetched ${accountsData?.length || 0} accounts for user ${effectiveUser.id}:`, accountsData);
-        
-        // If no accounts exist, create default accounts
-        if (!accountsData || accountsData.length === 0) {
-          console.log("No accounts found, creating default accounts");
-          await createDefaultAccounts(effectiveUser.id);
-          // Fetch accounts again after creating defaults
-          const { data: updatedAccountsData } = await supabaseClient
-            .from("accounts")
-            .select("*")
-            .eq("user_id", effectiveUser.id)
-            .order("name");
-          setAccounts(updatedAccountsData ? [...(updatedAccountsData as unknown as Account[])] : []);
-        } else {
-          setAccounts(accountsData ? [...(accountsData as unknown as Account[])] : []);
-        }
-        
-        // Calculate total assets and liabilities
-        const assetsTotal = accountsData
-          ? accountsData
-              .filter((a: any) => ["checking", "savings", "investment", "cash"].includes(a.type))
-              .reduce((sum: number, a: any) => sum + (parseFloat(a.balance) || 0), 0)
-          : 0;
-        
-        const liabilitiesTotal = accountsData
-          ? accountsData
-              .filter((a: any) => ["credit"].includes(a.type))
-              .reduce((sum: number, a: any) => sum + (parseFloat(a.balance) || 0), 0)
-          : 0;
-        
-        setAssets(assetsTotal);
-        setLiabilities(liabilitiesTotal);
-        setNetWorth(assetsTotal - liabilitiesTotal);
-        
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    
     fetchData();
-  }, [router, refreshKey]);
 
-  // Format currency
+    // Subscribe to changes
+    const accountsSubscription = supabase
+      .channel("accounts_channel")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "accounts",
+        },
+        () => {
+          fetchData();
+        },
+      )
+      .subscribe();
+
+    const settingsSubscription = supabase
+      .channel("settings_channel")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "company_settings",
+        },
+        () => {
+          fetchData();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      accountsSubscription.unsubscribe();
+      settingsSubscription.unsubscribe();
+    };
+  }, []);
+
+  const handleDeleteAccount = async (accountId: string) => {
+    try {
+      setDeletingAccountId(accountId);
+      const { error } = await supabase
+        .from("chart_of_accounts")
+        .delete()
+        .eq("id", accountId);
+
+      if (error) throw error;
+      toast.success("Account deleted successfully");
+      fetchData();
+    } catch (error) {
+      if (error instanceof Error) {
+        toast.error("Error deleting account: " + error.message);
+      } else {
+        toast.error("An unknown error occurred while deleting the account.");
+      }
+    } finally {
+      setDeletingAccountId(null);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat(CURRENCY_CONFIG[currency]?.locale || 'en-US', {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
-      minimumFractionDigits: CURRENCY_CONFIG[currency]?.minimumFractionDigits ?? 2,
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
   };
 
+  const getAccountTypeColor = (type: string) => {
+    switch (type) {
+      case "checking":
+      case "savings":
+      case "cash":
+      case "asset":
+        return "text-green-500";
+      case "credit":
+      case "liability":
+        return "text-red-500";
+      case "investment":
+      case "equity":
+        return "text-blue-500";
+      case "revenue":
+        return "text-purple-500";
+      case "expense":
+        return "text-orange-500";
+      default:
+        return "text-gray-500";
+    }
+  };
+
+  const calculateTotalBalance = () => {
+    return accounts.reduce((sum, account) => sum + account.balance, 0);
+  };
+
+  const totalBalance = calculateTotalBalance();
+
   if (loading) {
     return (
       <DashboardWrapper>
-        <div className="flex justify-center items-center h-[60vh]">
-          <p className="text-lg">Loading accounts...</p>
-        </div>
-      </DashboardWrapper>
-    );
-  }
-
-  if (accounts.length === 0) {
-    return (
-      <DashboardWrapper>
-        <div className="flex flex-col gap-8">
-          {/* Header Section */}
-          <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold">Accounts</h1>
-              <p className="text-muted-foreground">
-                Manage your financial accounts and track balances
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={() => router.push('/dashboard/accounts/new')}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Account
-              </Button>
-            </div>
-          </header>
-
-          <div className="flex flex-col items-center justify-center py-12">
-            <div className="text-center max-w-md">
-              <h2 className="text-xl font-semibold mb-2">No Accounts Yet</h2>
-              <p className="text-muted-foreground mb-6">
-                You haven't added any accounts yet. Add your first account to start tracking your finances.
-              </p>
-              <Link href="/dashboard/accounts/new">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" /> Add Your First Account
-                </Button>
-              </Link>
-            </div>
-          </div>
+        <div className="flex items-center justify-center h-full">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
         </div>
       </DashboardWrapper>
     );
@@ -373,127 +234,480 @@ export default function AccountsPage() {
 
   return (
     <DashboardWrapper>
-      <div className="container mx-auto p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Accounts</h1>
-          <Button onClick={() => router.push('/dashboard/accounts/new')}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Account
-          </Button>
-        </div>
-        
-        <div className="flex flex-col gap-8">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-sm font-medium text-muted-foreground">
-                  Total Assets
+      <div className="space-y-8">
+        <div>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight">Accounts</h2>
+              <p className="text-muted-foreground">
+                Manage your financial accounts and balances
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              {companySettings && (
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Company</p>
+                  <p className="text-lg font-semibold">
+                    {companySettings.company_name}
+                  </p>
                 </div>
-                <div className="text-2xl font-bold mt-2 text-green-600">
-                  {formatCurrency(assets)}
-                </div>
-                <div className="text-sm text-muted-foreground mt-1">
-                  Across{" "}
-                  {
-                    accounts.filter((a) =>
-                      ["checking", "savings", "investment", "cash"].includes(
-                        a.type,
-                      ),
-                    ).length
-                  }{" "}
-                  accounts
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-sm font-medium text-muted-foreground">
-                  Total Liabilities
-                </div>
-                <div className="text-2xl font-bold mt-2 text-red-600">
-                  {formatCurrency(liabilities)}
-                </div>
-                <div className="text-sm text-muted-foreground mt-1">
-                  Across{" "}
-                  {accounts.filter((a) => ["credit"].includes(a.type)).length}{" "}
-                  accounts
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-sm font-medium text-muted-foreground">
-                  Net Worth
-                </div>
-                <div
-                  className={`text-2xl font-bold mt-2 ${netWorth >= 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  {formatCurrency(netWorth)}
-                </div>
-                <div className="text-sm text-muted-foreground mt-1">
-                  Assets minus Liabilities
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Filters Section */}
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row gap-4 items-end">
-                <div className="flex-1 space-y-2">
-                  <label className="text-sm font-medium">Search</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input placeholder="Search accounts..." className="pl-10" />
-                  </div>
-                </div>
-                <Button variant="outline" size="icon" className="h-10 w-10">
-                  <Filter className="h-4 w-4" />
+              )}
+              <Link href="/dashboard/accounts/new">
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" /> Add Account
                 </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Balance
+              </CardTitle>
+              <Wallet className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {formatCurrency(totalBalance)}
               </div>
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Number of Accounts
+              </CardTitle>
+              <Building2 className="h-4 w-4 text-purple-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{accounts.length}</div>
+            </CardContent>
+          </Card>
+        </div>
 
-          {/* Accounts List */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {accounts.map((account) => (
-              <Link key={account.id} href={`/dashboard/accounts/${account.id}`}>
-                <Card className="h-full hover:shadow-md transition-shadow cursor-pointer">
-                  <CardContent className="pt-6">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-medium text-lg">{account.name}</h3>
-                        <p className="text-sm text-muted-foreground capitalize">
-                          {account.type}
-                        </p>
+        <Tabs defaultValue="all" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="all">All Accounts</TabsTrigger>
+            <TabsTrigger value="asset_liability">Assets & Liabilities</TabsTrigger>
+            <TabsTrigger value="equity">Equity</TabsTrigger>
+            <TabsTrigger value="revenue_expense">Revenue & Expenses</TabsTrigger>
+            <TabsTrigger value="bank_cash">Bank & Cash</TabsTrigger>
+          </TabsList>
+          <TabsContent value="all" className="space-y-4">
+            <div className="grid gap-4">
+              {accounts.map((account) => (
+                <Card
+                  key={account.id}
+                  className="hover:shadow-md transition-shadow"
+                >
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <div className="flex items-center space-x-4">
+                      <div className={`p-2 rounded-full bg-gray-100`}>
+                        <Wallet
+                          className={`h-4 w-4 ${getAccountTypeColor(account.type)}`}
+                        />
                       </div>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                      <div>
+                        <CardTitle className="text-sm font-medium">
+                          {account.name} ({account.code || 'N/A'})
+                        </CardTitle>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                          Type: {account.type}
+                        </div>
                       </div>
                     </div>
-                    <div className="mt-4">
+                    <div className="flex items-center gap-2">
                       <div
-                        className={`text-xl font-bold ${account.balance >= 0 ? "text-green-600" : "text-red-600"}`}
+                        className={`text-sm font-medium ${getAccountTypeColor(account.type)}`}
                       >
                         {formatCurrency(account.balance)}
                       </div>
-                      {account.institution && (
-                        <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
-                          <ExternalLink className="h-3 w-3" />
-                          {account.institution}
-                        </div>
-                      )}
+                      <Link
+                        href={`/dashboard/chart-of-accounts/${account.id}/edit`}
+                      >
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Account</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete this account? This
+                              action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteAccount(account.id)}
+                              className="bg-red-500 hover:bg-red-600"
+                              disabled={deletingAccountId === account.id}
+                            >
+                              {deletingAccountId === account.id
+                                ? "Deleting..."
+                                : "Delete"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
-                  </CardContent>
+                  </CardHeader>
+                  {account.notes && (
+                    <CardContent className="pt-0">
+                      <p className="text-sm text-muted-foreground">
+                        {account.notes}
+                      </p>
+                    </CardContent>
+                  )}
                 </Card>
-              </Link>
-            ))}
-          </div>
-        </div>
+              ))}
+            </div>
+          </TabsContent>
+          <TabsContent value="asset_liability" className="space-y-4">
+            {accounts
+              .filter((a) => a.type === "asset" || a.type === "liability")
+              .map((account) => (
+                <Card key={account.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <div className="flex items-center space-x-4">
+                      <div className={`p-2 rounded-full bg-gray-100`}>
+                        <Wallet
+                          className={`h-4 w-4 ${getAccountTypeColor(account.type)}`}
+                        />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-medium">
+                          {account.name} ({account.code || 'N/A'})
+                        </CardTitle>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                          Type: {account.type}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`text-sm font-medium ${getAccountTypeColor(account.type)}`}
+                      >
+                        {formatCurrency(account.balance)}
+                      </div>
+                      <Link
+                        href={`/dashboard/chart-of-accounts/${account.id}/edit`}
+                      >
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Account</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete this account? This
+                              action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteAccount(account.id)}
+                              className="bg-red-500 hover:bg-red-600"
+                              disabled={deletingAccountId === account.id}
+                            >
+                              {deletingAccountId === account.id
+                                ? "Deleting..."
+                                : "Delete"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </CardHeader>
+                  {account.notes && (
+                    <CardContent className="pt-0">
+                      <p className="text-sm text-muted-foreground">
+                        {account.notes}
+                      </p>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
+          </TabsContent>
+          <TabsContent value="equity" className="space-y-4">
+            {accounts
+              .filter((a) => a.type === "equity")
+              .map((account) => (
+                <Card key={account.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <div className="flex items-center space-x-4">
+                      <div className={`p-2 rounded-full bg-gray-100`}>
+                        <Wallet
+                          className={`h-4 w-4 ${getAccountTypeColor(account.type)}`}
+                        />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-medium">
+                          {account.name} ({account.code || 'N/A'})
+                        </CardTitle>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                          Type: {account.type}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`text-sm font-medium ${getAccountTypeColor(account.type)}`}
+                      >
+                        {formatCurrency(account.balance)}
+                      </div>
+                      <Link
+                        href={`/dashboard/chart-of-accounts/${account.id}/edit`}
+                      >
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Account</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete this account? This
+                              action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteAccount(account.id)}
+                              className="bg-red-500 hover:bg-red-600"
+                              disabled={deletingAccountId === account.id}
+                            >
+                              {deletingAccountId === account.id
+                                ? "Deleting..."
+                                : "Delete"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </CardHeader>
+                  {account.notes && (
+                    <CardContent className="pt-0">
+                      <p className="text-sm text-muted-foreground">
+                        {account.notes}
+                      </p>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
+          </TabsContent>
+          <TabsContent value="revenue_expense" className="space-y-4">
+            {accounts
+              .filter((a) => a.type === "revenue" || a.type === "expense")
+              .map((account) => (
+                <Card key={account.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <div className="flex items-center space-x-4">
+                      <div className={`p-2 rounded-full bg-gray-100`}>
+                        <Wallet
+                          className={`h-4 w-4 ${getAccountTypeColor(account.type)}`}
+                        />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-medium">
+                          {account.name} ({account.code || 'N/A'})
+                        </CardTitle>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                          Type: {account.type}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`text-sm font-medium ${getAccountTypeColor(account.type)}`}
+                      >
+                        {formatCurrency(account.balance)}
+                      </div>
+                      <Link
+                        href={`/dashboard/chart-of-accounts/${account.id}/edit`}
+                      >
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Account</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete this account? This
+                              action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteAccount(account.id)}
+                              className="bg-red-500 hover:bg-red-600"
+                              disabled={deletingAccountId === account.id}
+                            >
+                              {deletingAccountId === account.id
+                                ? "Deleting..."
+                                : "Delete"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </CardHeader>
+                  {account.notes && (
+                    <CardContent className="pt-0">
+                      <p className="text-sm text-muted-foreground">
+                        {account.notes}
+                      </p>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
+          </TabsContent>
+          <TabsContent value="bank_cash" className="space-y-4">
+            {accounts
+              .filter((a) => a.type === "checking" || a.type === "savings" || a.type === "cash")
+              .map((account) => (
+                <Card key={account.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <div className="flex items-center space-x-4">
+                      <div className={`p-2 rounded-full bg-gray-100`}>
+                        <Wallet
+                          className={`h-4 w-4 ${getAccountTypeColor(account.type)}`}
+                        />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-medium">
+                          {account.name} ({account.code || 'N/A'})
+                        </CardTitle>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                          Type: {account.type} | Inst: {account.institution || 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`text-sm font-medium ${getAccountTypeColor(account.type)}`}
+                      >
+                        {formatCurrency(account.balance)}
+                      </div>
+                      <Link
+                        href={`/dashboard/chart-of-accounts/${account.id}/edit`}
+                      >
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Account</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete this account? This
+                              action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteAccount(account.id)}
+                              className="bg-red-500 hover:bg-red-600"
+                              disabled={deletingAccountId === account.id}
+                            >
+                              {deletingAccountId === account.id
+                                ? "Deleting..."
+                                : "Delete"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </CardHeader>
+                  {account.notes && (
+                    <CardContent className="pt-0">
+                      <p className="text-sm text-muted-foreground">
+                        {account.notes}
+                      </p>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
+          </TabsContent>
+        </Tabs>
+
+        {accounts.length === 0 && (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <div className="text-center max-w-md">
+                <h3 className="text-xl font-semibold mb-2">No Accounts Yet</h3>
+                <p className="text-muted-foreground mb-6">
+                  Add your first account to start tracking your finances.
+                </p>
+                <Link href="/dashboard/accounts/new">
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" /> Add Your First Account
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </DashboardWrapper>
   );

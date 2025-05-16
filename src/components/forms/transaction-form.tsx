@@ -16,11 +16,13 @@ export function TransactionForm() {
     }
   };
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      const formData = new FormData(e.currentTarget);
-      onSubmit(formData);
-    }}>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        onSubmit(formData);
+      }}
+    >
       {/* Form fields */}
       <Button disabled={isSubmitting}>
         {isSubmitting ? (
@@ -29,9 +31,9 @@ export function TransactionForm() {
             Saving...
           </>
         ) : (
-          'Save'
+          "Save"
         )}
       </Button>
     </form>
   );
-} 
+}

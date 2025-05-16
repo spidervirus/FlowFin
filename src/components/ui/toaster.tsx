@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React from 'react';
+import React from "react";
 import {
   Toast,
   ToastClose,
@@ -17,14 +17,14 @@ type ToastType = {
   description?: React.ReactNode;
   action?: React.ReactNode;
   open?: boolean;
-  variant?: 'default' | 'destructive';
+  variant?: "default" | "destructive";
   [key: string]: any;
 };
 
 // Create a simple implementation of useToast that works without dependencies
 function useToast() {
   const [toasts, setToasts] = React.useState<ToastType[]>([]);
-  
+
   return {
     toasts,
     toast: () => {},

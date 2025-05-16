@@ -1,188 +1,192 @@
 "use client";
 
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/lib/auth/auth-context'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react'
 import { Message } from "@/components/form-message";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import Link from "next/link";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth/auth-context";
-import FormErrorMessage from "@/components/form-error-message";
-import { LoadingSpinner } from "@/components/loading-spinner";
-import { handleError } from "@/lib/error-handler";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2 } from "lucide-react";
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import * as z from 'zod'
+import { 
+  Form, 
+  FormControl, 
+  FormField, 
+  FormItem, 
+  FormLabel, 
+  FormMessage 
+} from '@/components/ui/form'
 
-type SignInFormProps = {
-  searchParams: Message;
-};
+// Define validation schema with zod
+const formSchema = z.object({
+  email: z.string()
+    .min(1, { message: 'Email is required' })
+    .email({ message: 'Must be a valid email address' }),
+  password: z.string()
+    .min(1, { message: 'Password is required' })
+    .min(6, { message: 'Password must be at least 6 characters' })
+})
+
+type FormValues = z.infer<typeof formSchema>
+
+interface SignInFormProps {
+  searchParams?: Message;
+}
 
 export function SignInForm({ searchParams }: SignInFormProps) {
-  const [formError, setFormError] = useState<string | null>(null);
-  const [formSuccess, setFormSuccess] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn } = useAuth()
+  const [error, setError] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
-  // Check for messages in sessionStorage on component mount
+  // Initialize React Hook Form
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      email: '',
+      password: ''
+    },
+    mode: 'onBlur' // Validate on blur for better UX
+  })
+  
+  const isSubmitting = form.formState.isSubmitting
+
+  // Handle searchParams after mount to prevent hydration mismatch
   useEffect(() => {
-    const errorMsg = sessionStorage.getItem("error");
-    const successMsg = sessionStorage.getItem("success");
-    
-    if (errorMsg) {
-      setFormError(errorMsg);
-      sessionStorage.removeItem("error");
+    setMounted(true)
+    if (searchParams && 'error' in searchParams) {
+      setError(searchParams.error)
     }
-    
-    if (successMsg) {
-      setFormSuccess(successMsg);
-      sessionStorage.removeItem("success");
-    }
-    
-    // Check for error in URL params
-    if (searchParams && "error" in searchParams) {
-      setFormError(searchParams.error);
-    }
-  }, [searchParams]);
+  }, [searchParams])
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setFormError(null);
-    setFormSuccess(null);
-    setIsLoading(true);
-    
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-    
-    if (!email || !password) {
-      setFormError("Email and password are required");
-      setIsLoading(false);
-      return;
-    }
-    
+  // Form submission handler
+  async function onSubmit(values: FormValues) {
     try {
-      const { success, error } = await signIn(email, password);
+      setError(null)
+      console.debug('[Sign In Form Debug] Submitting sign in:', { email: values.email })
       
-      if (error) {
-        // Use our error handler to get a user-friendly message
-        const appError = handleError(error);
-        setFormError(appError.message);
-      } else if (success) {
-        // Check if there's a redirect URL in sessionStorage
-        const redirectUrl = sessionStorage.getItem("redirectUrl");
-        if (redirectUrl) {
-          sessionStorage.removeItem("redirectUrl");
-          router.push(redirectUrl);
-        } else {
-          // Default redirect to dashboard
-          router.push("/dashboard");
-        }
+      const { success, error } = await signIn(values.email, values.password)
+
+      if (!success) {
+        console.error('[Sign In Form Debug] Sign in failed:', error)
+        setError(error || 'Failed to sign in')
+        return
       }
-    } catch (error) {
-      console.error("Sign in error:", error);
-      const appError = handleError(error);
-      setFormError(appError.message);
-    } finally {
-      setIsLoading(false);
+
+      console.debug('[Sign In Form Debug] Sign in successful')
+    } catch (err) {
+      console.error('[Sign In Form Debug] Sign in error:', err)
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
     }
-  };
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-md mx-auto">
       <div className="space-y-2 text-center">
-        <h1 className="text-3xl font-bold">Sign In</h1>
+        <h1 className="text-3xl font-bold">Welcome Back</h1>
         <p className="text-muted-foreground">
-          Enter your credentials to access your account
+          Sign in to your account to continue
         </p>
       </div>
 
-      {formError && (
-        <FormErrorMessage 
-          message={formError} 
-          variant="destructive" 
-          onDismiss={() => setFormError(null)}
-        />
-      )}
-      
-      {formSuccess && (
-        <Alert className="bg-success/10 border-success/30 text-success">
-          <CheckCircle2 className="h-4 w-4" />
-          <AlertTitle>Success</AlertTitle>
-          <AlertDescription>{formSuccess}</AlertDescription>
+      {mounted && (error || (searchParams && 'error' in searchParams)) && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <p>{error || (searchParams && 'error' in searchParams ? searchParams.error : '')}</p>
+          </AlertDescription>
         </Alert>
       )}
       
-      {searchParams && "error" in searchParams && !formError && (
-        <FormErrorMessage 
-          message={searchParams.error} 
-          variant="destructive"
-        />
-      )}
-      
-      {searchParams && "success" in searchParams && (
-        <Alert className="bg-success/10 border-success/30 text-success">
-          <CheckCircle2 className="h-4 w-4" />
-          <AlertTitle>Success</AlertTitle>
-          <AlertDescription>{searchParams.success}</AlertDescription>
+      {mounted && searchParams && 'message' in searchParams && !error && (
+        <Alert>
+          <AlertDescription>
+            <p>{searchParams.message}</p>
+          </AlertDescription>
         </Alert>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
             name="email"
-            type="email"
-            placeholder="name@example.com"
-            required
-            autoComplete="email"
-            disabled={isLoading}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Enter your email"
+                    type="email"
+                    autoComplete="email"
+                    disabled={isSubmitting}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            <Link
-              href="/reset-password"
-              className="text-sm text-primary hover:underline"
-            >
-              Forgot password?
-            </Link>
-          </div>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            placeholder="••••••••"
-            required
-            autoComplete="current-password"
-            disabled={isLoading}
-          />
-        </div>
-        <button
-          type="submit"
-          className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <>
-              <LoadingSpinner size="sm" className="mr-2" color="default" />
-              Signing in...
-            </>
-          ) : (
-            "Sign In"
-          )}
-        </button>
-      </form>
 
-      <div className="text-center text-sm">
-        Don&apos;t have an account?{" "}
-        <Link href="/sign-up" className="text-primary hover:underline">
-          Sign up
-        </Link>
-      </div>
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Password</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      placeholder="Enter your password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      disabled={isSubmitting}
+                      {...field}
+                    />
+                    <button 
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      onClick={() => setShowPassword(!showPassword)}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4 text-gray-400" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing in...
+              </>
+            ) : (
+              'Sign in'
+            )}
+          </Button>
+
+          <div className="text-sm text-center space-x-1">
+            <a href="/reset-password" className="text-primary hover:underline">
+              Forgot password?
+            </a>
+            <span>·</span>
+            <a href="/sign-up" className="text-primary hover:underline">
+              Create account
+            </a>
+          </div>
+        </form>
+      </Form>
     </div>
-  );
+  )
 } 

@@ -21,6 +21,7 @@ Follow these steps to set up your database tables in Supabase:
 4. Click the "Run" button to execute the SQL
 
 This will:
+
 - Create all the necessary tables (accounts, categories, transactions, invoices, etc.)
 - Set up row-level security policies
 - Insert sample data for your user
@@ -31,6 +32,7 @@ After running the SQL, you can verify that the tables were created and data was 
 
 1. In the left sidebar, click on "Table Editor"
 2. You should see the following tables:
+
    - accounts
    - categories
    - transactions
@@ -71,4 +73,4 @@ If you encounter any issues:
    SELECT * FROM transactions WHERE user_id = auth.uid();
    SELECT * FROM invoices WHERE user_id = auth.uid();
    ```
-   to verify that data exists for your user 
+   to verify that data exists for your user

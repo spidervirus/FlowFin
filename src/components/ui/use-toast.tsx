@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import * as React from "react";
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
@@ -186,4 +186,4 @@ export function useToast() {
   };
 }
 
-export { toast }; 
+export { toast };

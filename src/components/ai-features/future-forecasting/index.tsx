@@ -1,73 +1,77 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import dynamic from 'next/dynamic';
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardHeader, 
+import dynamic from "next/dynamic";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  TrendingUp, 
-  AlertCircle, 
-  RefreshCw, 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  TrendingUp,
+  AlertCircle,
+  RefreshCw,
   Calendar,
   Sparkles,
   BarChart3,
   LineChart as LineChartIcon,
   LogIn,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
 } from "lucide-react";
 import { useForecastData } from "@/hooks/useForecastData";
-import type { MonthlyData as BaseMonthlyData, CategoryForecast } from "@/hooks/useForecastData";
+import type { MonthlyData, CategoryForecast, UpcomingExpense } from "@/types/forecasting";
 import { CurrencyCode, CURRENCY_CONFIG, formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
-import { createClient } from '@/lib/supabase-browser';
+import { createClient } from "@/lib/supabase-browser";
 
-// Extend MonthlyData to include currency
-interface MonthlyData extends BaseMonthlyData {
-  currency?: CurrencyCode;
-}
-
-// Dynamically import heavy components with proper types
-const CashFlowChart = dynamic<{ data: MonthlyData[]; currencyCode: CurrencyCode }>(() => import('./CashFlowChart'), {
+// Dynamically import heavy components
+const CashFlowChart = dynamic<{
+  data: MonthlyData[];
+  currencyCode: CurrencyCode;
+}>(() => import("./CashFlowChart"), {
   loading: () => <Skeleton className="h-[400px] w-full" />,
-  ssr: false
+  ssr: false,
 });
 
-const CategoryChart = dynamic<{ data: CategoryForecast[]; currencyCode: CurrencyCode }>(() => import('./CategoryChart'), {
+const CategoryChart = dynamic<{
+  data: CategoryForecast[];
+  currencyCode: CurrencyCode;
+}>(() => import("./CategoryChart"), {
   loading: () => <Skeleton className="h-[400px] w-full" />,
-  ssr: false
+  ssr: false,
 });
 
 export default function FutureForecasting() {
   const [forecastPeriod, setForecastPeriod] = useState<"3months" | "6months" | "12months">("3months");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [authCheckDone, setAuthCheckDone] = useState(false);
-  
+
   const {
-    monthlyData: baseMonthlyData,
+    monthlyData,
     categoryForecasts,
     upcomingExpenses,
     isLoading,
     error,
     refreshData,
-    settings
+    settings,
   } = useForecastData(forecastPeriod);
 
-  // Cast the base monthly data to our extended interface
-  const monthlyData = baseMonthlyData as MonthlyData[];
-
-  // Use currency from settings or first monthly data point
-  const currencyCode = settings?.default_currency || (monthlyData[0]?.currency as CurrencyCode) || "USD";
+  // Use currency from settings or default to USD
+  const currencyCode = (settings?.default_currency || "USD") as CurrencyCode;
 
   // Format currency values
   const formatCurrencyValue = (value: number) => {
@@ -79,8 +83,11 @@ export default function FutureForecasting() {
     const checkAuth = async () => {
       try {
         const supabase = createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
         if (userError) {
           console.error("Authentication error:", userError);
           setIsAuthenticated(false);
@@ -94,7 +101,7 @@ export default function FutureForecasting() {
         setAuthCheckDone(true);
       }
     };
-    
+
     checkAuth();
   }, []);
 
@@ -102,25 +109,29 @@ export default function FutureForecasting() {
     try {
       // Verify user is authenticated before refreshing
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
         toast.error("Authentication failed. Please sign in again.");
         setIsAuthenticated(false);
         return;
       }
-      
+
       setIsAuthenticated(true);
       console.log("Refreshing forecasts with user ID:", user.id);
-      
+
       // Show loading toast
       toast.loading("Updating forecast data...", { id: "forecast-refresh" });
-      
+
       // Call refresh
       await refreshData();
-      
+
       // Update toast to success
-      toast.success("Forecast data updated successfully", { id: "forecast-refresh" });
+      toast.success("Forecast data updated successfully", {
+        id: "forecast-refresh",
+      });
     } catch (err) {
       console.error("Error refreshing forecast data:", err);
       toast.error("Failed to update forecast data", { id: "forecast-refresh" });
@@ -157,7 +168,9 @@ export default function FutureForecasting() {
       <Card>
         <CardHeader>
           <CardTitle>Future Forecasting</CardTitle>
-          <CardDescription>Predict your future financial situation</CardDescription>
+          <CardDescription>
+            Predict your future financial situation
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
@@ -178,7 +191,9 @@ export default function FutureForecasting() {
       <Card>
         <CardHeader>
           <CardTitle>Future Forecasting</CardTitle>
-          <CardDescription>Predict your future financial situation</CardDescription>
+          <CardDescription>
+            Predict your future financial situation
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
@@ -200,14 +215,16 @@ export default function FutureForecasting() {
       <Card>
         <CardHeader>
           <CardTitle>Future Forecasting</CardTitle>
-          <CardDescription>Predict your future financial situation</CardDescription>
+          <CardDescription>
+            Predict your future financial situation
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>No Data Available</AlertTitle>
             <AlertDescription>
-              We couldn't find any transaction data to generate forecasts. 
+              We couldn't find any transaction data to generate forecasts.
               Please add transactions to see forecasting insights.
             </AlertDescription>
           </Alert>
@@ -232,10 +249,7 @@ export default function FutureForecasting() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-4">
-            <Select
-              value={forecastPeriod}
-              onValueChange={handlePeriodChange}
-            >
+            <Select value={forecastPeriod} onValueChange={handlePeriodChange}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Forecast Period" />
               </SelectTrigger>
@@ -271,11 +285,18 @@ export default function FutureForecasting() {
                 <div className="flex items-start gap-3">
                   <Sparkles className="h-5 w-5 text-purple-600 mt-0.5" />
                   <div>
-                    <h3 className="font-medium text-purple-800 mb-1">AI Cash Flow Prediction</h3>
+                    <h3 className="font-medium text-purple-800 mb-1">
+                      AI Cash Flow Prediction
+                    </h3>
                     <p className="text-sm text-purple-700">
-                      Based on your historical data and spending patterns, we've predicted your 
-                      cash flow for the next {forecastPeriod === "3months" ? "3" : forecastPeriod === "6months" ? "6" : "12"} months.
-                      Predictions are shown with lighter colors.
+                      Based on your historical data and spending patterns, we've
+                      predicted your cash flow for the next{" "}
+                      {forecastPeriod === "3months"
+                        ? "3"
+                        : forecastPeriod === "6months"
+                          ? "6"
+                          : "12"}{" "}
+                      months. Predictions are shown with lighter colors.
                     </p>
                   </div>
                 </div>
@@ -286,7 +307,7 @@ export default function FutureForecasting() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {monthlyData
-                .filter(item => item.prediction)
+                .filter((item) => item.isProjected)
                 .slice(0, 3)
                 .map((item, index) => (
                   <Card key={index}>
@@ -313,10 +334,12 @@ export default function FutureForecasting() {
                 <div className="flex items-start gap-3">
                   <TrendingUp className="h-5 w-5 text-indigo-600 mt-0.5" />
                   <div>
-                    <h3 className="font-medium text-indigo-800 mb-1">Category Spending Forecast</h3>
+                    <h3 className="font-medium text-indigo-800 mb-1">
+                      Category Spending Forecast
+                    </h3>
                     <p className="text-sm text-indigo-700">
-                      Based on your spending patterns, we've predicted how your expenses in each category 
-                      will change in the coming month.
+                      Based on your spending patterns, we've predicted how your
+                      expenses in each category will change in the coming month.
                     </p>
                   </div>
                 </div>
@@ -324,7 +347,10 @@ export default function FutureForecasting() {
             </Card>
 
             {categoryForecasts && categoryForecasts.length > 0 ? (
-              <CategoryChart data={categoryForecasts} currencyCode={currencyCode} />
+              <CategoryChart
+                data={categoryForecasts}
+                currencyCode={currencyCode}
+              />
             ) : (
               <div className="text-center py-12">
                 <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
@@ -337,33 +363,32 @@ export default function FutureForecasting() {
             )}
 
             <div className="space-y-4">
-              {categoryForecasts.map((forecast, index) => (
+              {categoryForecasts.map((forecast: CategoryForecast, index: number) => (
                 <div
                   key={index}
                   className="flex items-center gap-4 border-b pb-4 last:border-0 last:pb-0"
                 >
-                  <div 
-                    className="w-3 h-3 rounded-full" 
-                    style={{ backgroundColor: forecast.color }}
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: forecast.category_color }}
                   />
-                  <div className="w-32 font-medium">{forecast.category}</div>
+                  <div className="w-32 font-medium">{forecast.category_name}</div>
                   <div className="flex-1">
                     <div className="flex justify-between mb-1">
                       <span className="text-sm text-muted-foreground">
-                        Current: {formatCurrencyValue(forecast.current)}
+                        Current: {formatCurrencyValue(forecast.current_amount)}
                       </span>
                       <span className="text-sm font-medium">
-                        Forecast: {formatCurrencyValue(forecast.forecast)}
-                        {forecast.change > 0 && (
+                        Forecast: {formatCurrencyValue(forecast.forecast_amount)}
+                        {forecast.percentage_change > 0 && (
                           <span className="text-amber-600 ml-2 text-xs">
-                            <ArrowUp className="h-3 w-3 inline" />{" "}
-                            {forecast.change}%
+                            <ArrowUp className="h-3 w-3 inline" /> {forecast.percentage_change}%
                           </span>
                         )}
-                        {forecast.change < 0 && (
+                        {forecast.percentage_change < 0 && (
                           <span className="text-green-600 ml-2 text-xs">
                             <ArrowDown className="h-3 w-3 inline" />{" "}
-                            {Math.abs(forecast.change)}%
+                            {Math.abs(forecast.percentage_change)}%
                           </span>
                         )}
                       </span>
@@ -372,8 +397,8 @@ export default function FutureForecasting() {
                       <div
                         className="h-full rounded-full"
                         style={{
-                          width: `${(forecast.current / Math.max(forecast.current, forecast.forecast)) * 100}%`,
-                          backgroundColor: forecast.color
+                          width: `${(forecast.current_amount / Math.max(forecast.current_amount, forecast.forecast_amount)) * 100}%`,
+                          backgroundColor: forecast.category_color,
                         }}
                       />
                     </div>
@@ -389,10 +414,18 @@ export default function FutureForecasting() {
                 <div className="flex items-start gap-3">
                   <Calendar className="h-5 w-5 text-blue-600 mt-0.5" />
                   <div>
-                    <h3 className="font-medium text-blue-800 mb-1">Upcoming Expenses</h3>
+                    <h3 className="font-medium text-blue-800 mb-1">
+                      Upcoming Expenses
+                    </h3>
                     <p className="text-sm text-blue-700">
-                      Based on your recurring transactions, we've predicted your upcoming expenses 
-                      for the next {forecastPeriod === "3months" ? "3" : forecastPeriod === "6months" ? "6" : "12"} months.
+                      Based on your recurring transactions, we've predicted your
+                      upcoming expenses for the next{" "}
+                      {forecastPeriod === "3months"
+                        ? "3"
+                        : forecastPeriod === "6months"
+                          ? "6"
+                          : "12"}{" "}
+                      months.
                     </p>
                   </div>
                 </div>
@@ -401,33 +434,29 @@ export default function FutureForecasting() {
 
             {upcomingExpenses && upcomingExpenses.length > 0 ? (
               <div className="space-y-4">
-                {upcomingExpenses.map((expense) => (
+                {upcomingExpenses.map((expense: UpcomingExpense) => (
                   <Card key={expense.id}>
                     <CardContent className="p-4">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
-                          <div 
-                            className="w-2 h-10 rounded-full" 
-                            style={{ backgroundColor: expense.categoryColor }}
+                          <div
+                            className="w-2 h-10 rounded-full"
+                            style={{ backgroundColor: expense.category_color }}
                           />
                           <div>
                             <h4 className="font-medium">{expense.description}</h4>
                             <p className="text-sm text-muted-foreground">
-                              {expense.category} • {new Date(expense.date).toLocaleDateString('en-US', { 
-                                month: 'short', 
-                                day: 'numeric', 
-                                year: 'numeric' 
+                              {expense.category_name} •{" "}
+                              {new Date(expense.due_date).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
                               })}
                             </p>
                           </div>
                         </div>
                         <div className="text-lg font-semibold">
-                          {new Intl.NumberFormat(CURRENCY_CONFIG[currencyCode].locale, {
-                            style: 'currency',
-                            currency: currencyCode,
-                            minimumFractionDigits: CURRENCY_CONFIG[currencyCode].minimumFractionDigits ?? 0,
-                            maximumFractionDigits: 0,
-                          }).format(expense.amount)}
+                          {formatCurrencyValue(expense.amount)}
                         </div>
                       </div>
                     </CardContent>
@@ -449,4 +478,4 @@ export default function FutureForecasting() {
       </CardContent>
     </Card>
   );
-} 
+}

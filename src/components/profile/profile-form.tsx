@@ -44,12 +44,16 @@ interface ProfileFormProps {
   backupUser?: any;
 }
 
-export default function ProfileForm({ user, mainUser, backupUser }: ProfileFormProps) {
+export default function ProfileForm({
+  user,
+  mainUser,
+  backupUser,
+}: ProfileFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Get profile data from either main or backup user
   const profile = mainUser || backupUser || {};
-  
+
   // Default form values
   const defaultValues: Partial<ProfileFormValues> = {
     fullName: profile.full_name || user.user_metadata?.full_name || "",
@@ -63,14 +67,14 @@ export default function ProfileForm({ user, mainUser, backupUser }: ProfileFormP
 
   async function onSubmit(data: ProfileFormValues) {
     setIsSubmitting(true);
-    
+
     try {
       const result = await updateUserProfile({
         userId: user.id,
         fullName: data.fullName,
         email: data.email,
       });
-      
+
       if (result.success) {
         toast.success("Profile updated successfully");
       } else {
@@ -88,9 +92,7 @@ export default function ProfileForm({ user, mainUser, backupUser }: ProfileFormP
     <Card>
       <CardHeader>
         <CardTitle>Profile Information</CardTitle>
-        <CardDescription>
-          Update your profile information.
-        </CardDescription>
+        <CardDescription>Update your profile information.</CardDescription>
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -118,11 +120,11 @@ export default function ProfileForm({ user, mainUser, backupUser }: ProfileFormP
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="Your email address" 
+                    <Input
+                      placeholder="Your email address"
                       type="email"
                       disabled // Email cannot be changed as it's the login identifier
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormDescription>
@@ -142,4 +144,4 @@ export default function ProfileForm({ user, mainUser, backupUser }: ProfileFormP
       </Form>
     </Card>
   );
-} 
+}

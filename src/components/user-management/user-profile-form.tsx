@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { createSupabaseClient } from '@/lib/supabase-client';
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Loader2, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -33,9 +33,9 @@ export default function UserProfileForm({
   user,
   userProfile,
 }: UserProfileFormProps) {
-  const supabase = createSupabaseClient();
+  const supabase = createClient();
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, user: authUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     full_name: userProfile?.full_name || user?.user_metadata?.full_name || "",
@@ -56,7 +56,7 @@ export default function UserProfileForm({
     setLoading(true);
 
     try {
-      if (!session) {
+      if (!session?.user) {
         toast.error("Please sign in to update your profile");
         return;
       }
@@ -72,17 +72,18 @@ export default function UserProfileForm({
       }
 
       // Update profile in database
-      const { error: profileError } = await supabase
-        .from("user_profiles")
-        .upsert({
-          id: session.user.id,
-          full_name: formData.full_name,
-          avatar_url: formData.avatar_url,
-          job_title: formData.job_title,
-          phone: formData.phone,
-          department: formData.department,
-          updated_at: new Date().toISOString(),
-        });
+      const { error: profileError } = await supabase.from("user_profiles").upsert({
+        id: session.user.id,
+        user_id: session.user.id,
+        email: session.user.email,
+        full_name: formData.full_name,
+        avatar_url: formData.avatar_url,
+        job_title: formData.job_title,
+        phone: formData.phone,
+        department: formData.department,
+        role: "user",
+        updated_at: new Date().toISOString(),
+      });
 
       if (profileError) {
         toast.error("Failed to update profile data");
@@ -111,7 +112,9 @@ export default function UserProfileForm({
       <Card>
         <CardContent className="py-10">
           <div className="text-center">
-            <p className="text-muted-foreground">Please sign in to view and update your profile.</p>
+            <p className="text-muted-foreground">
+              Please sign in to view and update your profile.
+            </p>
           </div>
         </CardContent>
       </Card>

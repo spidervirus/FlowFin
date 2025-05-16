@@ -1,13 +1,19 @@
 "use client";
 
 import { FinancialGoal } from "@/types/financial";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Plus, Trash2, PiggyBank } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -36,28 +42,29 @@ export default function GoalsList({ goals = [], currency }: GoalsListProps) {
     return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
       style: "currency",
       currency,
-      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
+      minimumFractionDigits:
+        CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
       maximumFractionDigits: 0,
     }).format(value);
   };
 
   const handleDeleteGoal = async () => {
     if (!deletingGoalId) return;
-    
+
     setIsDeleting(true);
     try {
       const response = await fetch(`/api/goals?id=${deletingGoalId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to delete goal');
+        throw new Error("Failed to delete goal");
       }
-      
+
       // Refresh the page to show updated data
       router.refresh();
     } catch (error) {
-      console.error('Error deleting goal:', error);
+      console.error("Error deleting goal:", error);
     } finally {
       setIsDeleting(false);
       setDeletingGoalId(null);
@@ -67,10 +74,10 @@ export default function GoalsList({ goals = [], currency }: GoalsListProps) {
   // Format date to readable format
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
 
@@ -95,7 +102,9 @@ export default function GoalsList({ goals = [], currency }: GoalsListProps) {
         {goals.length === 0 ? (
           <div className="text-center py-8">
             <PiggyBank className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground mb-4">You don't have any active goals</p>
+            <p className="text-muted-foreground mb-4">
+              You don&apos;t have any active goals
+            </p>
             <Link href="/dashboard/goals/new">
               <Button>
                 <Plus className="mr-2 h-4 w-4" /> Create Your First Goal
@@ -105,14 +114,15 @@ export default function GoalsList({ goals = [], currency }: GoalsListProps) {
         ) : (
           <div className="space-y-4">
             {goals.map((goal) => {
-              const percentage = goal.target_amount > 0 
-                ? (goal.current_amount / goal.target_amount) * 100 
-                : 0;
+              const percentage =
+                goal.target_amount > 0
+                  ? (goal.current_amount / goal.target_amount) * 100
+                  : 0;
               const daysRemaining = getDaysRemaining(goal.target_date);
-              
+
               return (
-                <div 
-                  key={goal.id} 
+                <div
+                  key={goal.id}
                   className="flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-lg"
                 >
                   <div className="space-y-2 mb-4 md:mb-0 flex-1">
@@ -122,49 +132,51 @@ export default function GoalsList({ goals = [], currency }: GoalsListProps) {
                         <Badge variant="success">Completed</Badge>
                       )}
                     </div>
-                    
+
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm text-muted-foreground">
-                      <span>
-                        Target: {formatCurrency(goal.target_amount)}
-                      </span>
+                      <span>Target: {formatCurrency(goal.target_amount)}</span>
                       <span className="hidden sm:inline">•</span>
                       <span>
-                        {formatDate(goal.start_date)} - {formatDate(goal.target_date)}
+                        {formatDate(goal.start_date)} -{" "}
+                        {formatDate(goal.target_date)}
                       </span>
                       {goal.category && (
                         <>
                           <span className="hidden sm:inline">•</span>
-                          <span>
-                            Category: {goal.category.name}
-                          </span>
+                          <span>Category: {goal.category.name}</span>
                         </>
                       )}
                     </div>
-                    
+
                     {goal.description && (
                       <p className="text-sm">{goal.description}</p>
                     )}
-                    
+
                     <div className="flex flex-col space-y-1 mt-2">
                       <div className="flex justify-between text-xs">
                         <span>Progress</span>
                         <span>
-                          {formatCurrency(goal.current_amount)} of {formatCurrency(goal.target_amount)} ({percentage.toFixed(0)}%)
+                          {formatCurrency(goal.current_amount)} of{" "}
+                          {formatCurrency(goal.target_amount)} (
+                          {percentage.toFixed(0)}%)
                         </span>
                       </div>
                       <Progress value={percentage} className="h-2" />
-                      
+
                       {!goal.is_completed && (
                         <div className="flex justify-between text-xs text-muted-foreground mt-1">
                           <span>{daysRemaining} days remaining</span>
                           <span>
-                            {formatCurrency(goal.target_amount - goal.current_amount)} to go
+                            {formatCurrency(
+                              goal.target_amount - goal.current_amount,
+                            )}{" "}
+                            to go
                           </span>
                         </div>
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="flex gap-2">
                     <Link href={`/dashboard/goals/${goal.id}`}>
                       <Button variant="outline" size="sm">
@@ -178,8 +190,8 @@ export default function GoalsList({ goals = [], currency }: GoalsListProps) {
                     </Link>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => setDeletingGoalId(goal.id)}
                         >
@@ -190,19 +202,22 @@ export default function GoalsList({ goals = [], currency }: GoalsListProps) {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will permanently delete this goal and all associated contributions.
-                            This action cannot be undone.
+                            This will permanently delete this goal and all
+                            associated contributions. This action cannot be
+                            undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel onClick={() => setDeletingGoalId(null)}>
+                          <AlertDialogCancel
+                            onClick={() => setDeletingGoalId(null)}
+                          >
                             Cancel
                           </AlertDialogCancel>
-                          <AlertDialogAction 
+                          <AlertDialogAction
                             onClick={handleDeleteGoal}
                             disabled={isDeleting}
                           >
-                            {isDeleting ? 'Deleting...' : 'Delete'}
+                            {isDeleting ? "Deleting..." : "Delete"}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
@@ -216,4 +231,4 @@ export default function GoalsList({ goals = [], currency }: GoalsListProps) {
       </CardContent>
     </Card>
   );
-} 
+}

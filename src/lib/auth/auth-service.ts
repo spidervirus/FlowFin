@@ -1,407 +1,300 @@
-'use client';
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
+import { handleError, showErrorToast } from "@/lib/error-handler";
 
-import { createClient } from '@/lib/supabase/client';
-import { User, Session } from '@supabase/supabase-js';
-import { handleError, showErrorToast, ErrorType, ErrorSeverity, createError } from '@/lib/error-handler';
-
-// Define types for our auth state
-export interface AuthState {
-  user: User | null;
-  session: Session | null;
-  isLoading: boolean;
-  error: Error | null;
-}
-
-// Define types for stored user data
-export interface StoredUserData {
-  id: string;
-  email?: string;
-  lastAuthenticated: number; // timestamp
-}
-
-class AuthService {
-  private static instance: AuthService;
-  private supabase = createClient();
-  private refreshTimerId: NodeJS.Timeout | null = null;
-  private refreshInterval = 10 * 60 * 1000; // 10 minutes
+// Extract project reference from Supabase URL for consistent cookie naming
+const getProjectRef = () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
   
-  // Private constructor for singleton pattern
-  private constructor() {
-    // Initialize refresh timer if we have a session
-    this.initializeFromStorage();
+  const matches = supabaseUrl.match(/(?:db|api)\.([^.]+)\.supabase\./);
+  return matches?.[1] ?? 'default';
+};
+
+// Create a singleton instance of the Supabase client
+let supabaseInstance: ReturnType<typeof createClientComponentClient> | null = null;
+
+const getSupabase = () => {
+  if (!supabaseInstance) {
+    supabaseInstance = createClientComponentClient({
+      cookieOptions: {
+        name: `sb-${getProjectRef()}-auth-token`,
+        domain: process.env.NODE_ENV === 'production' ? process.env.NEXT_PUBLIC_SITE_URL?.replace('https://', '') : undefined,
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      }
+    });
+
+    // Add debug listener for auth state changes
+    supabaseInstance.auth.onAuthStateChange((event, session) => {
+      console.debug('[Auth Service Debug] Auth state changed:', {
+        event,
+        hasSession: !!session,
+        userId: session?.user?.id,
+        accessToken: session?.access_token ? '[REDACTED]' : undefined,
+        cookies: typeof window !== 'undefined' ? document.cookie.split(';').map(c => c.trim().split('=')[0]) : []
+      });
+    });
   }
-  
-  // Get singleton instance
+  return supabaseInstance;
+};
+
+export class AuthService {
+  private static instance: AuthService | null = null;
+  private refreshTimerId: NodeJS.Timeout | null = null;
+  private isInitialized = false;
+  private authStateSubscription: { unsubscribe: () => void } | null = null;
+  private readonly refreshInterval = 60 * 60 * 1000; // 1 hour in milliseconds
+  private supabase: ReturnType<typeof createClientComponentClient>;
+
+  private constructor() {
+    this.supabase = getSupabase();
+    if (typeof window !== "undefined") {
+      this.initialize();
+    }
+  }
+
   public static getInstance(): AuthService {
     if (!AuthService.instance) {
       AuthService.instance = new AuthService();
     }
     return AuthService.instance;
   }
-  
-  // Initialize from localStorage
-  private initializeFromStorage(): void {
-    if (typeof window === 'undefined') return;
-    
+
+  private async initialize() {
+    if (this.isInitialized) return;
+
     try {
-      // Check if we have a session in Supabase storage
-      this.supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          console.log('Session found, setting up refresh timer');
-          this.setupRefreshTimer();
-          this.storeUserData(session.user);
-        } else {
-          console.log('No session found in Supabase storage');
-        }
-      }).catch(error => {
-        console.error('Error getting session during initialization:', error);
-        const appError = handleError(error);
-        // Don't show toast during initialization to avoid disrupting user experience
+      const {
+        data: { session },
+        error,
+      } = await this.supabase.auth.getSession();
+
+      console.debug('[Auth Service Debug] Initializing service:', {
+        hasSession: !!session,
+        userId: session?.user?.id,
+        error: error?.message,
+        cookies: typeof window !== 'undefined' ? document.cookie.split(';').map(c => c.trim().split('=')[0]) : []
       });
-    } catch (error) {
-      console.error('Error initializing from storage:', error);
-      handleError(error);
-    }
-  }
-  
-  // Set up refresh timer
-  private setupRefreshTimer(): void {
-    // Clear any existing timer
-    if (this.refreshTimerId) {
-      clearInterval(this.refreshTimerId);
-    }
-    
-    // Set up new timer
-    this.refreshTimerId = setInterval(async () => {
-      try {
-        console.log('Refreshing session token...');
-        const { data, error } = await this.supabase.auth.refreshSession();
-        
-        if (error) {
-          console.error('Error refreshing session:', error);
-          this.handleSessionError(error);
-        } else if (data.session) {
-          console.log('Session refreshed successfully');
-          this.storeUserData(data.session.user);
-        }
-      } catch (error) {
-        console.error('Exception refreshing session:', error);
-        this.handleSessionError(error);
+
+      if (error) {
+        console.error("Error initializing auth:", error);
+        return;
       }
-    }, this.refreshInterval);
+
+      if (session) {
+        this.setupRefreshTimer(session);
+      }
+
+      this.isInitialized = true;
+    } catch (error) {
+      console.error("Failed to initialize auth service:", error);
+    }
   }
-  
-  // Handle session error
-  private handleSessionError(error?: any): void {
-    // Clear refresh timer
+
+  private setupAuthListener() {
+    const {
+      data: { subscription },
+    } = this.supabase.auth.onAuthStateChange(
+      async (event: AuthChangeEvent, session) => {
+        console.debug('[Auth Service Debug] Auth state changed:', {
+          event,
+          hasSession: !!session,
+          userId: session?.user?.id,
+          cookies: typeof window !== 'undefined' ? document.cookie.split(';').map(c => c.trim().split('=')[0]) : []
+        });
+
+        switch (event) {
+          case "SIGNED_IN":
+          case "TOKEN_REFRESHED":
+            if (session) {
+              this.setupRefreshTimer(session);
+            }
+            break;
+
+          case "SIGNED_OUT":
+            this.clearStaleData();
+            break;
+        }
+      },
+    );
+
+    this.authStateSubscription = subscription;
+  }
+
+  private setupRefreshTimer(session: Session) {
     if (this.refreshTimerId) {
-      clearInterval(this.refreshTimerId);
+      clearTimeout(this.refreshTimerId);
+    }
+
+    const timeUntilExpiry = session.expires_at
+      ? session.expires_at * 1000 - Date.now()
+      : this.refreshInterval;
+
+    const refreshTime = Math.max(0, timeUntilExpiry - 60 * 1000); // Refresh 1 minute before expiry
+
+    console.debug('[Auth Service Debug] Setting up refresh timer:', {
+      timeUntilExpiry: Math.floor(timeUntilExpiry / 1000),
+      refreshTime: Math.floor(refreshTime / 1000),
+      sessionExpiresAt: session.expires_at
+    });
+
+    this.refreshTimerId = setTimeout(async () => {
+      await this.refreshSession();
+    }, refreshTime);
+  }
+
+  private clearStaleData(): void {
+    if (this.refreshTimerId) {
+      clearTimeout(this.refreshTimerId);
       this.refreshTimerId = null;
     }
-    
-    // Mark session as requiring re-authentication
-    const userData = this.getUserData();
-    if (userData) {
-      userData.lastAuthenticated = 0; // Force re-authentication
-      this.setUserData(userData);
+
+    if (typeof window !== "undefined") {
+      console.debug('[Auth Service Debug] Clearing stale data');
+      this.supabase.auth.signOut();
     }
-    
-    // Create and handle error
-    if (error) {
-      const appError = createError(
-        ErrorType.AUTHENTICATION,
-        'Your session has expired. Please sign in again.',
-        ErrorSeverity.WARNING,
-        error,
-        'auth/session-expired'
-      );
+  }
+
+  public async signIn(
+    email: string,
+    password: string,
+  ): Promise<{ user: User | null; error: Error | null }> {
+    try {
+      console.debug('[Auth Service Debug] Attempting sign in:', { email });
       
-      // Don't show toast for session errors during background refresh
-      // This will be handled when the user tries to perform an action
-    }
-  }
-  
-  // Store user data in localStorage
-  private storeUserData(user: User): void {
-    if (!user) return;
-    
-    const userData: StoredUserData = {
-      id: user.id,
-      email: user.email || undefined,
-      lastAuthenticated: Date.now()
-    };
-    
-    // Store in multiple formats for compatibility
-    localStorage.setItem('currentUserId', user.id);
-    localStorage.setItem('userData', JSON.stringify({ user: { id: user.id, email: user.email } }));
-    localStorage.setItem('authUserData', JSON.stringify(userData));
-    
-    // Also store in sessionStorage for redundancy
-    sessionStorage.setItem('currentUserId', user.id);
-  }
-  
-  // Get stored user data
-  private getUserData(): StoredUserData | null {
-    try {
-      const userDataStr = localStorage.getItem('authUserData');
-      if (userDataStr) {
-        return JSON.parse(userDataStr);
-      }
-    } catch (error) {
-      console.error('Error parsing stored user data:', error);
-      handleError(error);
-    }
-    return null;
-  }
-  
-  // Set user data
-  private setUserData(userData: StoredUserData): void {
-    localStorage.setItem('authUserData', JSON.stringify(userData));
-  }
-  
-  // Sign in with email and password
-  public async signIn(email: string, password: string): Promise<{ user: User | null; error: Error | null }> {
-    try {
       const { data, error } = await this.supabase.auth.signInWithPassword({
         email,
-        password
+        password,
       });
-      
-      if (error) {
-        console.error('Sign in error:', error);
-        const appError = handleError({
-          ...error,
-          code: error.code || 'auth/unknown'
-        });
-        return { user: null, error: appError.originalError || new Error(appError.message) };
-      }
-      
-      if (data.user) {
-        this.storeUserData(data.user);
-        this.setupRefreshTimer();
-      }
-      
+
+      console.debug('[Auth Service Debug] Sign in result:', {
+        success: !error,
+        hasUser: !!data.user,
+        cookies: typeof window !== 'undefined' ? document.cookie.split(';').map(c => c.trim().split('=')[0]) : []
+      });
+
+      if (error) throw error;
+
       return { user: data.user, error: null };
     } catch (error) {
-      console.error('Exception during sign in:', error);
-      const appError = handleError(error);
-      return { user: null, error: appError.originalError || new Error(appError.message) };
+      console.error("Sign in error:", error);
+      return { user: null, error: error as Error };
     }
   }
-  
-  // Sign up with email and password
-  public async signUp(email: string, password: string, metadata?: { [key: string]: any }): Promise<{ user: User | null; error: Error | null }> {
+
+  public async signUp(
+    email: string,
+    password: string,
+    metadata?: { [key: string]: any },
+  ): Promise<{ user: User | null; error: Error | null }> {
     try {
       const { data, error } = await this.supabase.auth.signUp({
         email,
         password,
         options: {
-          data: metadata
-        }
+          data: metadata,
+        },
       });
-      
-      if (error) {
-        console.error('Sign up error:', error);
-        const appError = handleError({
-          ...error,
-          code: error.code || 'auth/unknown'
-        });
-        return { user: null, error: appError.originalError || new Error(appError.message) };
-      }
-      
-      if (data.user) {
-        this.storeUserData(data.user);
-        this.setupRefreshTimer();
-      }
-      
+
+      if (error) throw error;
+
       return { user: data.user, error: null };
     } catch (error) {
-      console.error('Exception during sign up:', error);
-      const appError = handleError(error);
-      return { user: null, error: appError.originalError || new Error(appError.message) };
+      console.error("Sign up error:", error);
+      return { user: null, error: error as Error };
     }
   }
-  
-  // Sign out
+
   public async signOut(): Promise<{ error: Error | null }> {
     try {
       const { error } = await this.supabase.auth.signOut();
-      
-      // Clear refresh timer
-      if (this.refreshTimerId) {
-        clearInterval(this.refreshTimerId);
-        this.refreshTimerId = null;
-      }
-      
-      // Clear stored user data
-      localStorage.removeItem('currentUserId');
-      localStorage.removeItem('userData');
-      localStorage.removeItem('authUserData');
-      sessionStorage.removeItem('currentUserId');
-      
-      if (error) {
-        const appError = handleError({
-          ...error,
-          code: error.code || 'auth/unknown'
-        });
-        return { error: appError.originalError || new Error(appError.message) };
-      }
-      
+
+      if (error) throw error;
+
+      this.clearStaleData();
       return { error: null };
     } catch (error) {
-      console.error('Exception during sign out:', error);
-      const appError = handleError(error);
-      return { error: appError.originalError || new Error(appError.message) };
+      console.error("Sign out error:", error);
+      return { error: error as Error };
     }
   }
-  
-  // Get current user
-  public async getUser(): Promise<{ user: User | null; error: Error | null }> {
+
+  public async getSession(): Promise<{
+    session: Session | null;
+    error: Error | null;
+  }> {
+    if (!this.isInitialized && typeof window !== "undefined") {
+      await this.initialize();
+    }
+
     try {
-      // First try to get from Supabase
-      const { data, error } = await this.supabase.auth.getUser();
-      
-      if (error) {
-        console.error('Error getting user:', error);
-        // Fall back to stored user data
-        const userData = this.getUserData();
-        if (userData) {
-          // Check if stored data is still valid (less than 24 hours old)
-          const isValid = Date.now() - userData.lastAuthenticated < 24 * 60 * 60 * 1000;
-          if (isValid) {
-            return { 
-              user: { 
-                id: userData.id,
-                email: userData.email || null,
-                app_metadata: {},
-                user_metadata: {},
-                aud: 'authenticated',
-                created_at: ''
-              } as User, 
-              error: null 
-            };
-          }
-        }
-        
-        const appError = handleError({
-          ...error,
-          code: error.code || 'auth/unknown'
-        });
-        return { user: null, error: appError.originalError || new Error(appError.message) };
+      const {
+        data: { session },
+        error,
+      } = await this.supabase.auth.getSession();
+
+      if (error) throw error;
+
+      if (session) {
+        this.setupRefreshTimer(session);
       }
-      
-      if (data.user) {
-        this.storeUserData(data.user);
-      }
-      
-      return { user: data.user, error: null };
+
+      return { session, error: null };
     } catch (error) {
-      console.error('Exception getting user:', error);
-      const appError = handleError(error);
-      return { user: null, error: appError.originalError || new Error(appError.message) };
+      console.error("Get session error:", error);
+      return { session: null, error: error as Error };
     }
   }
-  
-  // Get current session
-  public async getSession(): Promise<{ session: Session | null; error: Error | null }> {
+
+  public async refreshSession(): Promise<{
+    session: Session | null;
+    error: Error | null;
+  }> {
     try {
-      const { data, error } = await this.supabase.auth.getSession();
-      
-      if (error) {
-        console.error('Error getting session:', error);
-        const appError = handleError({
-          ...error,
-          code: error.code || 'auth/unknown'
-        });
-        return { session: null, error: appError.originalError || new Error(appError.message) };
+      const {
+        data: { session },
+        error,
+      } = await this.supabase.auth.refreshSession();
+
+      if (error) throw error;
+
+      if (session) {
+        this.setupRefreshTimer(session);
       }
-      
-      if (data.session) {
-        this.setupRefreshTimer();
-      }
-      
-      return { session: data.session, error: null };
+
+      return { session, error: null };
     } catch (error) {
-      console.error('Exception getting session:', error);
-      const appError = handleError(error);
-      return { session: null, error: appError.originalError || new Error(appError.message) };
+      console.error("Session refresh error:", error);
+      return { session: null, error: error as Error };
     }
   }
-  
-  // Refresh session
-  public async refreshSession(): Promise<{ session: Session | null; error: Error | null }> {
-    try {
-      const { data, error } = await this.supabase.auth.refreshSession();
-      
-      if (error) {
-        console.error('Error refreshing session:', error);
-        this.handleSessionError(error);
-        const appError = handleError({
-          ...error,
-          code: error.code || 'auth/session-expired'
-        });
-        return { session: null, error: appError.originalError || new Error(appError.message) };
-      }
-      
-      if (data.session) {
-        this.storeUserData(data.session.user);
-      }
-      
-      return { session: data.session, error: null };
-    } catch (error) {
-      console.error('Exception refreshing session:', error);
-      this.handleSessionError(error);
-      const appError = handleError(error);
-      return { session: null, error: appError.originalError || new Error(appError.message) };
-    }
-  }
-  
-  // Check if user is authenticated
+
   public async isAuthenticated(): Promise<boolean> {
-    const { user, error } = await this.getUser();
-    return !!user && !error;
+    try {
+      const { session, error } = await this.getSession();
+      return !error && !!session;
+    } catch {
+      return false;
+    }
   }
-  
-  // Get user ID (synchronous version for immediate use)
-  public getUserId(): string | null {
-    // Try localStorage first
-    const userId = localStorage.getItem('currentUserId');
-    if (userId) return userId;
-    
-    // Try userData
-    try {
-      const userDataStr = localStorage.getItem('userData');
-      if (userDataStr) {
-        const userData = JSON.parse(userDataStr);
-        if (userData?.user?.id) return userData.user.id;
-      }
-    } catch (e) {
-      console.error('Error parsing userData:', e);
-      handleError(e);
+
+  public onAuthStateChange(
+    callback: (event: AuthChangeEvent, session: Session | null) => void,
+  ): { data: { subscription: { unsubscribe: () => void } } } {
+    return this.supabase.auth.onAuthStateChange(callback);
+  }
+
+  public cleanup(): void {
+    if (this.refreshTimerId) {
+      clearTimeout(this.refreshTimerId);
+      this.refreshTimerId = null;
     }
-    
-    // Try authUserData
-    try {
-      const authUserDataStr = localStorage.getItem('authUserData');
-      if (authUserDataStr) {
-        const authUserData = JSON.parse(authUserDataStr);
-        if (authUserData?.id) return authUserData.id;
-      }
-    } catch (e) {
-      console.error('Error parsing authUserData:', e);
-      handleError(e);
-    }
-    
-    // Try sessionStorage
-    const sessionUserId = sessionStorage.getItem('currentUserId');
-    if (sessionUserId) return sessionUserId;
-    
-    return null;
   }
 }
 
-// Export singleton instance
-export const authService = AuthService.getInstance();
-
-// Export default for convenience
-export default authService; 
+// Create and export the singleton instance
+export const authService =
+  typeof window !== "undefined" ? AuthService.getInstance() : null;
+export default authService;

@@ -1,146 +1,163 @@
-import DashboardNavbar from "@/components/dashboard-navbar";
-import SpendingInsights from "@/components/ai-features/spending-insights";
-import ReceiptScanner from "@/components/ai-features/receipt-scanner";
-import SmartBudgeting from "@/components/ai-features/smart-budgeting";
-import FutureForecasting from "@/components/ai-features/future-forecasting";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lightbulb, TrendingUp, Sparkles, Receipt } from "lucide-react";
 import { CurrencyCode } from "@/lib/utils";
-import { createSupabaseClient } from '@/lib/supabase-client';
+import DashboardWrapper from "../dashboard-wrapper";
+import SpendingInsights from "@/components/ai-features/spending-insights";
+import ReceiptScanner from "@/components/ai-features/receipt-scanner";
+import SmartBudgeting from "@/components/ai-features/smart-budgeting/index";
+import FutureForecasting from "@/components/ai-features/future-forecasting";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
-export default async function AIFeaturesPage() {
-  const supabase = await createClient();
+interface CompanySettings {
+  default_currency: CurrencyCode;
+}
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export default function AIFeaturesPage() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [currency, setCurrency] = useState<CurrencyCode>("USD");
+  const [activeTab, setActiveTab] = useState("insights");
 
-  if (!user) {
-    return redirect("/sign-in");
+  useEffect(() => {
+    let settingsSubscription: any;
+    let isMounted = true;
+
+    async function fetchDataAndSubscribe() {
+      setIsLoading(true);
+      try {
+        const supabaseClient = createClient();
+
+        // Check if user is authenticated
+        const {
+          data: { user },
+        } = await supabaseClient.auth.getUser();
+        if (!user) {
+          router.push("/sign-in");
+          return;
+        }
+
+        // Fetch company settings
+        const { data: settingsData, error: settingsError } =
+          await supabaseClient
+            .from("company_settings")
+            .select("*")
+            .eq("user_id", user.id)
+            .single();
+
+        if (settingsError) {
+          console.error("Error fetching company settings:", settingsError);
+          toast.error("Failed to load company settings");
+          return;
+        }
+
+        if (!isMounted) return;
+        setSettings(settingsData);
+        if (settingsData?.default_currency) {
+          setCurrency(settingsData.default_currency as CurrencyCode);
+        }
+
+    // Set up real-time subscription for settings updates
+        settingsSubscription = supabaseClient
+      .channel("settings_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "company_settings",
+              filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+              fetchDataAndSubscribe(); // re-fetch settings on change
+        },
+      )
+      .subscribe();
+      } catch (error) {
+        console.error("Error in fetchDataAndSubscribe:", error);
+        toast.error("An error occurred while loading data");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    fetchDataAndSubscribe();
+
+    return () => {
+      isMounted = false;
+      if (settingsSubscription) settingsSubscription.unsubscribe();
+    };
+  }, [router]);
+
+  if (isLoading) {
+    return (
+      <DashboardWrapper>
+        <div className="flex justify-center items-center h-[60vh]">
+          <p className="text-lg">Loading AI features...</p>
+        </div>
+      </DashboardWrapper>
+    );
   }
 
-  // Get company settings
-  const supabaseClient = createSupabaseClient();
-  const { data: settings } = await supabaseClient
-    .from('company_settings')
-    .select('*')
-    .single();
-
-  // Use default currency if settings don't exist
-  const currency = settings?.default_currency as CurrencyCode || 'USD';
-
   return (
-    <>
-      <DashboardNavbar />
-      <main className="w-full bg-gray-50 min-h-screen">
-        <div className="container mx-auto px-4 py-8 flex flex-col gap-8">
-          {/* Header Section */}
-          <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold">AI Features</h1>
-              <p className="text-muted-foreground">
-                Intelligent insights and recommendations for your finances
-              </p>
-            </div>
-          </header>
+    <DashboardWrapper>
+      <div className="flex flex-col gap-8">
+        {/* Header Section */}
+        <header>
+          <h1 className="text-3xl font-bold">AI Features</h1>
+          <p className="text-muted-foreground">
+            Leverage artificial intelligence to enhance your financial
+            management
+          </p>
+        </header>
 
-          {/* AI Features Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-full bg-blue-100">
-                    <TrendingUp className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <CardTitle className="text-lg">Spending Insights</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-sm">
-                  Analyze your spending patterns and get personalized recommendations to optimize your budget.
-                </CardDescription>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-full bg-amber-100">
-                    <Lightbulb className="h-5 w-5 text-amber-600" />
-                  </div>
-                  <CardTitle className="text-lg">Smart Budgeting</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-sm">
-                  Get AI-powered budget suggestions based on your income, expenses, and financial goals.
-                </CardDescription>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-full bg-purple-100">
-                    <Sparkles className="h-5 w-5 text-purple-600" />
-                  </div>
-                  <CardTitle className="text-lg">Future Forecasting</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-sm">
-                  Predict future expenses and income based on your historical financial data.
-                </CardDescription>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-full bg-green-100">
-                    <Receipt className="h-5 w-5 text-green-600" />
-                  </div>
-                  <CardTitle className="text-lg">Receipt Scanner</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-sm">
-                  Upload receipt images to automatically extract and create transactions with OCR technology.
-                </CardDescription>
-              </CardContent>
-            </Card>
-          </div>
+        {/* AI Features Tabs */}
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="space-y-6"
+        >
+          <TabsList>
+            <TabsTrigger value="insights">
+              <Lightbulb className="mr-2 h-4 w-4" />
+              Spending Insights
+            </TabsTrigger>
+            <TabsTrigger value="budgeting">
+              <TrendingUp className="mr-2 h-4 w-4" />
+              Smart Budgeting
+            </TabsTrigger>
+            <TabsTrigger value="forecasting">
+              <Sparkles className="mr-2 h-4 w-4" />
+              Future Forecasting
+            </TabsTrigger>
+            <TabsTrigger value="scanner">
+              <Receipt className="mr-2 h-4 w-4" />
+              Receipt Scanner
+            </TabsTrigger>
+          </TabsList>
 
-          {/* Main Content */}
-          <Tabs defaultValue="spending-insights" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="spending-insights">Spending Insights</TabsTrigger>
-              <TabsTrigger value="smart-budgeting">Smart Budgeting</TabsTrigger>
-              <TabsTrigger value="future-forecasting">Future Forecasting</TabsTrigger>
-              <TabsTrigger value="receipt-scanner">Receipt Scanner</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="spending-insights">
+          <TabsContent value="insights">
               <SpendingInsights currency={currency} />
-            </TabsContent>
-            
-            <TabsContent value="smart-budgeting">
-              <SmartBudgeting currency={currency} />
-            </TabsContent>
-            
-            <TabsContent value="future-forecasting">
+          </TabsContent>
+
+          <TabsContent value="budgeting">
+            <SmartBudgeting />
+          </TabsContent>
+
+          <TabsContent value="forecasting">
               <FutureForecasting currency={currency} />
-            </TabsContent>
-            
-            <TabsContent value="receipt-scanner">
+          </TabsContent>
+
+          <TabsContent value="scanner">
               <ReceiptScanner currency={currency} />
-            </TabsContent>
-          </Tabs>
-        </div>
-      </main>
-    </>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </DashboardWrapper>
   );
 }

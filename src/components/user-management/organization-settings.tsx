@@ -20,61 +20,61 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createSupabaseClient } from '@/lib/supabase-client';
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Building2, Loader2, Save } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
-import { User } from '@supabase/supabase-js';
+import { User } from "@supabase/supabase-js";
 
 // Map of countries to their default currencies
 const COUNTRY_CURRENCY_MAP: Record<string, CurrencyCode> = {
-  'United States': 'USD',
-  'United Kingdom': 'GBP',
-  'European Union': 'EUR',
-  'Japan': 'JPY',
-  'Canada': 'CAD',
-  'Australia': 'AUD',
-  'China': 'CNY',
-  'India': 'INR',
-  'Switzerland': 'CHF',
-  'Sweden': 'SEK',
-  'Norway': 'NOK',
-  'Denmark': 'DKK',
-  'Poland': 'PLN',
-  'Czech Republic': 'CZK',
-  'Hungary': 'HUF',
-  'Romania': 'RON',
-  'Singapore': 'SGD',
-  'Hong Kong': 'HKD',
-  'South Korea': 'KRW',
-  'Indonesia': 'IDR',
-  'Malaysia': 'MYR',
-  'Thailand': 'THB',
-  'Philippines': 'PHP',
-  'Vietnam': 'VND',
-  'UAE': 'AED',
-  'Saudi Arabia': 'SAR',
-  'Israel': 'ILS',
-  'Qatar': 'QAR',
-  'Bahrain': 'BHD',
-  'Kuwait': 'KWD',
-  'Oman': 'OMR',
-  'Mexico': 'MXN',
-  'Brazil': 'BRL',
-  'Argentina': 'ARS',
-  'Chile': 'CLP',
-  'Colombia': 'COP',
-  'Peru': 'PEN',
-  'South Africa': 'ZAR',
-  'Nigeria': 'NGN',
-  'Kenya': 'KES',
-  'Egypt': 'EGP',
-  'Morocco': 'MAD',
-  'Ghana': 'GHS',
-  'New Zealand': 'NZD',
-  'Fiji': 'FJD',
-  'Papua New Guinea': 'PGK'
+  "United States": "USD",
+  "United Kingdom": "GBP",
+  "European Union": "EUR",
+  Japan: "JPY",
+  Canada: "CAD",
+  Australia: "AUD",
+  China: "CNY",
+  India: "INR",
+  Switzerland: "CHF",
+  Sweden: "SEK",
+  Norway: "NOK",
+  Denmark: "DKK",
+  Poland: "PLN",
+  "Czech Republic": "CZK",
+  Hungary: "HUF",
+  Romania: "RON",
+  Singapore: "SGD",
+  "Hong Kong": "HKD",
+  "South Korea": "KRW",
+  Indonesia: "IDR",
+  Malaysia: "MYR",
+  Thailand: "THB",
+  Philippines: "PHP",
+  Vietnam: "VND",
+  UAE: "AED",
+  "Saudi Arabia": "SAR",
+  Israel: "ILS",
+  Qatar: "QAR",
+  Bahrain: "BHD",
+  Kuwait: "KWD",
+  Oman: "OMR",
+  Mexico: "MXN",
+  Brazil: "BRL",
+  Argentina: "ARS",
+  Chile: "CLP",
+  Colombia: "COP",
+  Peru: "PEN",
+  "South Africa": "ZAR",
+  Nigeria: "NGN",
+  Kenya: "KES",
+  Egypt: "EGP",
+  Morocco: "MAD",
+  Ghana: "GHS",
+  "New Zealand": "NZD",
+  Fiji: "FJD",
+  "Papua New Guinea": "PGK",
 };
 
 interface CompanySettings {
@@ -103,7 +103,9 @@ interface OrganizationSettingsProps {
   initialUser: User;
 }
 
-export default function OrganizationSettings({ initialUser }: OrganizationSettingsProps) {
+export default function OrganizationSettings({
+  initialUser,
+}: OrganizationSettingsProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -126,7 +128,7 @@ export default function OrganizationSettings({ initialUser }: OrganizationSettin
             title: "Authentication Error",
             description: "Please sign in to access company settings",
           });
-          router.push('/sign-in');
+          router.push("/sign-in");
           return;
         }
 
@@ -140,42 +142,45 @@ export default function OrganizationSettings({ initialUser }: OrganizationSettin
         });
       }
     };
-    
+
     initializeData();
   }, [initialUser, router]);
 
   const fetchSettings = async (userId: string) => {
     try {
-      const supabaseClient = createSupabaseClient();
-      const { data: settings, error } = await supabaseClient
-        .from('company_settings')
-        .select('*')
-        .eq('user_id', userId)
-        .single() as { data: CompanySettings | null; error: any };
+      const supabaseClient = createClient();
+      const { data: settings, error } = (await supabaseClient
+        .from("company_settings")
+        .select("*")
+        .eq("user_id", userId)
+        .single()) as { data: CompanySettings | null; error: any };
 
       if (error) {
-        if (error.code === 'PGRST116') {
+        if (error.code === "PGRST116") {
           // No settings found, create default settings
-          const { data: newSettings, error: createError } = await supabaseClient
-            .from('company_settings')
-            .insert([{
-              user_id: userId,
-              company_name: 'My Company',
-              country: 'United States',
-              default_currency: 'USD' as CurrencyCode,
-              fiscal_year_start: '01',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }])
-            .select()
-            .single() as { data: CompanySettings | null; error: any };
+          const { data: newSettings, error: createError } =
+            (await supabaseClient
+              .from("company_settings")
+              .insert({
+                user_id: userId,
+                company_name: "My Company",
+                address: "",  // Required field
+                country: "United States",
+                default_currency: "USD" as CurrencyCode,
+                fiscal_year_start: "01",
+                industry: "other",  // Required field
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .select()
+              .single()) as { data: CompanySettings | null; error: any };
 
           if (createError) throw createError;
           if (newSettings) {
             setFormData({
               company_name: newSettings.company_name,
-              industry: newSettings.industry || '',
-              address: newSettings.address || '',
+              industry: newSettings.industry || "",
+              address: newSettings.address || "",
               country: newSettings.country,
               default_currency: newSettings.default_currency,
               fiscal_year_start: newSettings.fiscal_year_start,
@@ -187,19 +192,19 @@ export default function OrganizationSettings({ initialUser }: OrganizationSettin
       } else if (settings) {
         setFormData({
           company_name: settings.company_name,
-          industry: settings.industry || '',
-          address: settings.address || '',
+          industry: settings.industry || "",
+          address: settings.address || "",
           country: settings.country,
           default_currency: settings.default_currency,
           fiscal_year_start: settings.fiscal_year_start,
         });
       }
     } catch (error) {
-      console.error('Error fetching settings:', error);
+      console.error("Error fetching settings:", error);
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to load company settings',
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load company settings",
       });
     } finally {
       setIsLoading(false);
@@ -214,12 +219,12 @@ export default function OrganizationSettings({ initialUser }: OrganizationSettin
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    if (name === 'country') {
-      const defaultCurrency = COUNTRY_CURRENCY_MAP[value] || 'USD';
-      setFormData(prev => ({
+    if (name === "country") {
+      const defaultCurrency = COUNTRY_CURRENCY_MAP[value] || "USD";
+      setFormData((prev) => ({
         ...prev,
         country: value,
-        default_currency: defaultCurrency as CurrencyCode
+        default_currency: defaultCurrency as CurrencyCode,
       }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
@@ -229,15 +234,15 @@ export default function OrganizationSettings({ initialUser }: OrganizationSettin
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!initialUser?.id) return;
-    
+
     setIsSubmitting(true);
 
     try {
-      const supabaseClient = createSupabaseClient();
-      
+      const supabaseClient = createClient();
+
       // Update company settings
       const { error: settingsError } = await supabaseClient
-        .from('company_settings')
+        .from("company_settings")
         .update({
           company_name: formData.company_name,
           industry: formData.industry,
@@ -247,7 +252,7 @@ export default function OrganizationSettings({ initialUser }: OrganizationSettin
           fiscal_year_start: formData.fiscal_year_start,
           updated_at: new Date().toISOString(),
         })
-        .eq('user_id', initialUser.id);
+        .eq("user_id", initialUser.id);
 
       if (settingsError) throw settingsError;
 
@@ -323,7 +328,9 @@ export default function OrganizationSettings({ initialUser }: OrganizationSettin
                   <SelectItem value="education">Education</SelectItem>
                   <SelectItem value="retail">Retail</SelectItem>
                   <SelectItem value="manufacturing">Manufacturing</SelectItem>
-                  <SelectItem value="services">Professional Services</SelectItem>
+                  <SelectItem value="services">
+                    Professional Services
+                  </SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
@@ -352,7 +359,9 @@ export default function OrganizationSettings({ initialUser }: OrganizationSettin
               <Label htmlFor="default_currency">Default Currency</Label>
               <Select
                 value={formData.default_currency}
-                onValueChange={(value) => handleSelectChange("default_currency", value)}
+                onValueChange={(value) =>
+                  handleSelectChange("default_currency", value)
+                }
               >
                 <SelectTrigger id="default_currency">
                   <SelectValue placeholder="Select currency" />
@@ -383,7 +392,9 @@ export default function OrganizationSettings({ initialUser }: OrganizationSettin
               <Label htmlFor="fiscal_year_start">Fiscal Year Start</Label>
               <Select
                 value={formData.fiscal_year_start}
-                onValueChange={(value) => handleSelectChange("fiscal_year_start", value)}
+                onValueChange={(value) =>
+                  handleSelectChange("fiscal_year_start", value)
+                }
               >
                 <SelectTrigger id="fiscal_year_start">
                   <SelectValue placeholder="Select fiscal year start" />
@@ -425,8 +436,8 @@ export default function OrganizationSettings({ initialUser }: OrganizationSettin
       </CardContent>
       <CardFooter>
         <p className="text-xs text-muted-foreground">
-          These settings affect how your financial data is processed and displayed.
-          Make sure to keep them up to date.
+          These settings affect how your financial data is processed and
+          displayed. Make sure to keep them up to date.
         </p>
       </CardFooter>
     </Card>

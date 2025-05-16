@@ -1,164 +1,110 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
-import { createClient } from '@/lib/supabase/client';
-import { createSupabaseClient } from '@/lib/supabase-client';
+import { createClient } from "@/lib/supabase/client";
 
 export default function FallbackDashboard() {
-  const [isCreating, setIsCreating] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     const createSettings = async () => {
       try {
-        console.log("Creating company settings from fallback dashboard");
-        
+        setIsCreating(true);
+        setError(null);
+
         // Get the current user from Supabase
         const supabase = createClient();
-        const supabaseClient = createSupabaseClient();
-        
+
         // First check if we have a valid session
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError || !sessionData.session) {
-          console.log("No valid session found, cannot create company settings");
-          setError("No valid session found");
-          setIsCreating(false);
-          return;
-        }
-        
-        // Get the user
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        
-        if (userError || !userData?.user?.id) {
-          console.error("Error getting current user:", userError);
-          setError("Error getting current user");
-          setIsCreating(false);
-          return;
-        }
-        
-        const userId = userData.user.id;
-        
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!session?.user) throw new Error("No user session found");
+
         // Check if company settings already exist
-        const { data: existingSettings, error: checkError } = await supabaseClient
-          .from('company_settings')
-          .select('id')
-          .eq('user_id', userId)
-          .maybeSingle();
-        
+        const { data: existingSettings, error: checkError } = await supabase
+          .from("company_settings")
+          .select("id")
+          .eq("user_id", session.user.id)
+          .single();
+
+        if (checkError && checkError.code !== "PGRST116") throw checkError;
         if (existingSettings) {
-          console.log("Company settings already exist, reloading page");
           setSuccess(true);
-          
-          // Reload the page to show the dashboard
-          window.location.reload();
           return;
         }
-        
+
         // Create company settings
-        const { error: createError } = await supabaseClient
-          .from('company_settings')
+        const { error: createError } = await supabase
+          .from("company_settings")
           .insert({
-            user_id: userId,
+            user_id: session.user.id,
             company_name: "My Company",
-            country: "United States",
+            address: "123 Business Street",
+            country: "US",
             default_currency: "USD",
-            fiscal_year_start: "01",
+            fiscal_year_start: new Date().toISOString().split("T")[0],
+            industry: "Technology",
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
-        
-        if (createError) {
-          console.error("Error creating company settings:", createError);
-          setError("Error creating company settings");
-          setIsCreating(false);
-          return;
-        }
-        
-        console.log("Successfully created company settings");
+
+        if (createError) throw createError;
         setSuccess(true);
-        
-        // Reload the page to show the dashboard
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      } catch (err: any) {
-        console.error("Error creating company settings:", err);
-        setError(err.message || "An error occurred while creating company settings");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred");
+      } finally {
         setIsCreating(false);
       }
     };
-    
+
     createSettings();
   }, []);
-  
-  if (isCreating) {
+
+  if (isCreating)
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Setting Up Your Dashboard</CardTitle>
-            <CardDescription>
-              We're creating your company settings...
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center py-6">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="flex items-center justify-center p-6">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </CardContent>
+      </Card>
     );
-  }
-  
-  if (error) {
+
+  if (error)
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Setup Error</CardTitle>
-            <CardDescription>
-              There was an error setting up your dashboard.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-red-500 mb-4">
-              {error}
-            </p>
-          </CardContent>
-          <CardFooter>
-            <Button onClick={() => window.location.href = '/setup'} className="w-full">
-              Go to Setup
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
-  
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50">
-      <Card className="w-full max-w-md">
+      <Card>
         <CardHeader>
-          <CardTitle>Setup Complete</CardTitle>
+          <CardTitle>Error</CardTitle>
+          <CardDescription>{error}</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+
+  if (success)
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Success</CardTitle>
           <CardDescription>
-            Your company settings have been created successfully.
+            Company settings created successfully!
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-500 mb-4">
-            You will be redirected to the dashboard shortly.
-          </p>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={() => window.location.reload()} className="w-full">
-            Reload Dashboard
-          </Button>
-        </CardFooter>
       </Card>
-    </div>
-  );
+    );
+
+  return null;
 }

@@ -1,44 +1,44 @@
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config({ path: '.env.local' });
+const { createClient } = require("@supabase/supabase-js");
+require("dotenv").config({ path: ".env.local" });
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing Supabase credentials in .env.local file');
+  console.error("Missing Supabase credentials in .env.local file");
   process.exit(1);
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     autoRefreshToken: false,
-    persistSession: false
-  }
+    persistSession: false,
+  },
 });
 
 async function checkAndCreateCompanySettings() {
   try {
-    console.log('Checking if company_settings table exists...');
-    
+    console.log("Checking if company_settings table exists...");
+
     // Check if the table exists
     const { data: tableExists, error: tableError } = await supabase
-      .from('information_schema.tables')
-      .select('table_name')
-      .eq('table_schema', 'public')
-      .eq('table_name', 'company_settings')
+      .from("information_schema.tables")
+      .select("table_name")
+      .eq("table_schema", "public")
+      .eq("table_name", "company_settings")
       .single();
-    
-    if (tableError && tableError.code !== 'PGRST116') {
-      console.error('Error checking if table exists:', tableError);
+
+    if (tableError && tableError.code !== "PGRST116") {
+      console.error("Error checking if table exists:", tableError);
       return;
     }
-    
+
     if (!tableExists) {
-      console.log('company_settings table does not exist. Creating it...');
-      
+      console.log("company_settings table does not exist. Creating it...");
+
       // Create the company_settings table
-      const { error: createError } = await supabase.rpc('exec_sql', {
+      const { error: createError } = await supabase.rpc("exec_sql", {
         sql: `
           -- Create company_settings table
           CREATE TABLE IF NOT EXISTS company_settings (
@@ -85,37 +85,40 @@ async function checkAndCreateCompanySettings() {
               BEFORE UPDATE ON company_settings
               FOR EACH ROW
               EXECUTE FUNCTION update_updated_at_column();
-        `
+        `,
       });
-      
+
       if (createError) {
-        console.error('Error creating company_settings table:', createError);
+        console.error("Error creating company_settings table:", createError);
         return;
       }
-      
-      console.log('company_settings table created successfully!');
+
+      console.log("company_settings table created successfully!");
     } else {
-      console.log('company_settings table already exists.');
+      console.log("company_settings table already exists.");
     }
-    
+
     // Check if the user_preferences table exists
     const { data: prefsExists, error: prefsError } = await supabase
-      .from('information_schema.tables')
-      .select('table_name')
-      .eq('table_schema', 'public')
-      .eq('table_name', 'user_preferences')
+      .from("information_schema.tables")
+      .select("table_name")
+      .eq("table_schema", "public")
+      .eq("table_name", "user_preferences")
       .single();
-    
-    if (prefsError && prefsError.code !== 'PGRST116') {
-      console.error('Error checking if user_preferences table exists:', prefsError);
+
+    if (prefsError && prefsError.code !== "PGRST116") {
+      console.error(
+        "Error checking if user_preferences table exists:",
+        prefsError,
+      );
       return;
     }
-    
+
     if (!prefsExists) {
-      console.log('user_preferences table does not exist. Creating it...');
-      
+      console.log("user_preferences table does not exist. Creating it...");
+
       // Create the user_preferences table
-      const { error: createPrefsError } = await supabase.rpc('exec_sql', {
+      const { error: createPrefsError } = await supabase.rpc("exec_sql", {
         sql: `
           -- Create user_preferences table
           CREATE TABLE IF NOT EXISTS user_preferences (
@@ -149,22 +152,24 @@ async function checkAndCreateCompanySettings() {
               BEFORE UPDATE ON user_preferences
               FOR EACH ROW
               EXECUTE FUNCTION update_updated_at_column();
-        `
+        `,
       });
-      
+
       if (createPrefsError) {
-        console.error('Error creating user_preferences table:', createPrefsError);
+        console.error(
+          "Error creating user_preferences table:",
+          createPrefsError,
+        );
         return;
       }
-      
-      console.log('user_preferences table created successfully!');
+
+      console.log("user_preferences table created successfully!");
     } else {
-      console.log('user_preferences table already exists.');
+      console.log("user_preferences table already exists.");
     }
-    
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error("Unexpected error:", error);
   }
 }
 
-checkAndCreateCompanySettings(); 
+checkAndCreateCompanySettings();

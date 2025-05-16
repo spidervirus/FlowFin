@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'Setup - FlowFin',
-  description: 'Set up your financial management system',
+  title: "Setup - FlowFin",
+  description: "Set up your financial management system",
 };
 
 export default function StaticSetupLayout({
@@ -8,9 +8,5 @@ export default function StaticSetupLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div className="static-setup-layout">
-      {children}
-    </div>
-  );
-} 
+  return <div className="static-setup-layout">{children}</div>;
+}

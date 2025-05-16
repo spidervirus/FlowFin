@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo } from "react";
 import {
   LineChart,
   Line,
@@ -8,25 +8,18 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
-} from 'recharts';
-import { formatCurrency, CurrencyCode } from '@/lib/utils';
-
-interface MonthlyData {
-  month: string;
-  income: number;
-  expenses: number;
-  savings: number;
-  prediction: boolean;
-}
+} from "recharts";
+import { formatCurrency, CurrencyCode } from "@/lib/utils";
+import { MonthlyData } from "@/types/forecasting";
 
 interface CashFlowChartProps {
   data: MonthlyData[];
   currencyCode: CurrencyCode;
 }
 
-const CashFlowChart = memo(function CashFlowChart({ data, currencyCode }: CashFlowChartProps) {
-  const historicalData = data.filter(d => !d.prediction);
-  const forecastData = data.filter(d => d.prediction);
+function CashFlowChart({ data, currencyCode }: CashFlowChartProps) {
+  const historicalData = data.filter((d) => !d.isProjected);
+  const forecastData = data.filter((d) => d.isProjected);
 
   return (
     <div className="h-[400px] w-full">
@@ -37,8 +30,14 @@ const CashFlowChart = memo(function CashFlowChart({ data, currencyCode }: CashFl
         >
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="month" />
-          <YAxis tickFormatter={(value) => formatCurrency(value, currencyCode, { compact: true })} />
-          <Tooltip formatter={(value) => formatCurrency(Number(value), currencyCode)} />
+          <YAxis
+            tickFormatter={(value) =>
+              formatCurrency(value, currencyCode, { compact: true })
+            }
+          />
+          <Tooltip
+            formatter={(value) => formatCurrency(Number(value), currencyCode)}
+          />
           <Legend />
           {/* Historical Data */}
           <Line
@@ -109,6 +108,6 @@ const CashFlowChart = memo(function CashFlowChart({ data, currencyCode }: CashFl
       </ResponsiveContainer>
     </div>
   );
-});
+}
 
-export default CashFlowChart; 
+export default memo(CashFlowChart);

@@ -1,13 +1,19 @@
 "use client";
 
-import { Budget } from "@/types/financial";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Budget, BudgetTracking, BudgetCategory } from "@/types/financial";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -23,10 +29,11 @@ import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 
 interface BudgetListProps {
   budgets: Budget[];
+  tracking: BudgetTracking[];
   currency: CurrencyCode;
 }
 
-export default function BudgetList({ budgets, currency }: BudgetListProps) {
+export default function BudgetList({ budgets, tracking, currency }: BudgetListProps) {
   const router = useRouter();
   const [deletingBudgetId, setDeletingBudgetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -35,28 +42,29 @@ export default function BudgetList({ budgets, currency }: BudgetListProps) {
     return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
       style: "currency",
       currency,
-      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
+      minimumFractionDigits:
+        CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
       maximumFractionDigits: 0,
     }).format(value);
   };
 
   const handleDeleteBudget = async () => {
     if (!deletingBudgetId) return;
-    
+
     setIsDeleting(true);
     try {
       const response = await fetch(`/api/budgets?id=${deletingBudgetId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to delete budget');
+        throw new Error("Failed to delete budget");
       }
-      
+
       // Refresh the page to show updated data
       router.refresh();
     } catch (error) {
-      console.error('Error deleting budget:', error);
+      console.error("Error deleting budget:", error);
     } finally {
       setIsDeleting(false);
       setDeletingBudgetId(null);
@@ -66,10 +74,10 @@ export default function BudgetList({ budgets, currency }: BudgetListProps) {
   // Format date to readable format
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
 
@@ -84,7 +92,9 @@ export default function BudgetList({ budgets, currency }: BudgetListProps) {
       <CardContent>
         {budgets.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-muted-foreground mb-4">You don't have any active budgets</p>
+            <p className="text-muted-foreground mb-4">
+              You don&apos;t have any active budgets
+            </p>
             <Link href="/dashboard/budgets/new">
               <Button>Create Your First Budget</Button>
             </Link>
@@ -92,8 +102,8 @@ export default function BudgetList({ budgets, currency }: BudgetListProps) {
         ) : (
           <div className="space-y-4">
             {budgets.map((budget) => (
-              <div 
-                key={budget.id} 
+              <div
+                key={budget.id}
                 className="flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-lg"
               >
                 <div className="space-y-2 mb-4 md:mb-0">
@@ -101,27 +111,32 @@ export default function BudgetList({ budgets, currency }: BudgetListProps) {
                     <h3 className="font-medium">{budget.name}</h3>
                     {budget.is_recurring && budget.recurrence_period && (
                       <Badge variant="outline">
-                        {budget.recurrence_period.charAt(0).toUpperCase() + budget.recurrence_period.slice(1)}
+                        {budget.recurrence_period.charAt(0).toUpperCase() +
+                          budget.recurrence_period.slice(1)}
                       </Badge>
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {formatDate(budget.start_date)} - {formatDate(budget.end_date)}
+                    {formatDate(budget.start_date)} -{" "}
+                    {formatDate(budget.end_date)}
                   </p>
                   {budget.description && (
                     <p className="text-sm">{budget.description}</p>
                   )}
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {budget.budget_categories?.map((category) => (
-                      <Badge 
-                        key={category.id} 
+                    {budget.budget_categories?.map((category: BudgetCategory) => (
+                      <Badge
+                        key={category.id}
                         variant="secondary"
-                        style={{ 
-                          backgroundColor: category.category?.color ? `${category.category.color}20` : undefined,
-                          color: category.category?.color || undefined
+                        style={{
+                          backgroundColor: category.category?.color
+                            ? `${category.category.color}20`
+                            : undefined,
+                          color: category.category?.color || undefined,
                         }}
                       >
-                        {category.category?.name}: {formatCurrency(category.amount)}
+                        {category.category?.name}:{" "}
+                        {formatCurrency(category.amount)}
                       </Badge>
                     ))}
                   </div>
@@ -134,8 +149,8 @@ export default function BudgetList({ budgets, currency }: BudgetListProps) {
                   </Link>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
                         onClick={() => setDeletingBudgetId(budget.id)}
                       >
@@ -146,19 +161,21 @@ export default function BudgetList({ budgets, currency }: BudgetListProps) {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This will permanently delete this budget and all associated data.
-                          This action cannot be undone.
+                          This will permanently delete this budget and all
+                          associated data. This action cannot be undone.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setDeletingBudgetId(null)}>
+                        <AlertDialogCancel
+                          onClick={() => setDeletingBudgetId(null)}
+                        >
                           Cancel
                         </AlertDialogCancel>
-                        <AlertDialogAction 
+                        <AlertDialogAction
                           onClick={handleDeleteBudget}
                           disabled={isDeleting}
                         >
-                          {isDeleting ? 'Deleting...' : 'Delete'}
+                          {isDeleting ? "Deleting..." : "Delete"}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -171,4 +188,4 @@ export default function BudgetList({ budgets, currency }: BudgetListProps) {
       </CardContent>
     </Card>
   );
-} 
+}

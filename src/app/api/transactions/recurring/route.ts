@@ -39,11 +39,13 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("transactions")
-      .select(`
+      .select(
+        `
         *,
         account:accounts(id, name),
         category:categories(id, name, type, color)
-      `)
+      `,
+      )
       .eq("user_id", user.id)
       .eq("is_recurring", true)
       .order("date", { ascending: false });
@@ -51,34 +53,43 @@ export async function GET(request: NextRequest) {
     if (error) {
       logger.error("Error fetching recurring transactions:", error);
       return NextResponse.json(
-        { error: "Failed to fetch recurring transactions", details: error.message },
-        { status: 500 }
+        {
+          error: "Failed to fetch recurring transactions",
+          details: error.message,
+        },
+        { status: 500 },
       );
     }
 
     if (!data || data.length === 0) {
       return NextResponse.json({
         data: [],
-        message: "No recurring transactions found"
+        message: "No recurring transactions found",
       });
     }
 
     // Validate and sanitize the data
-    const validatedData = data.map(transaction => ({
+    const validatedData = data.map((transaction) => ({
       ...transaction,
       amount: Number(transaction.amount),
-      date: new Date(transaction.date).toISOString().split('T')[0]
+      date: new Date(transaction.date).toISOString().split("T")[0],
     }));
 
     return NextResponse.json({
       data: validatedData,
-      count: validatedData.length
+      count: validatedData.length,
     });
   } catch (error: unknown) {
-    logger.error("Error processing recurring transactions request:", error instanceof Error ? error : new Error('Unknown error'));
+    logger.error(
+      "Error processing recurring transactions request:",
+      error instanceof Error ? error : new Error("Unknown error"),
+    );
     return NextResponse.json(
-      { error: "Internal server error", details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
     );
   }
 }
@@ -104,7 +115,7 @@ export async function DELETE(request: NextRequest) {
     if (!id) {
       return NextResponse.json(
         { error: "Transaction ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -120,7 +131,7 @@ export async function DELETE(request: NextRequest) {
     if (getError) {
       return NextResponse.json(
         { error: "Recurring transaction not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -140,7 +151,7 @@ export async function DELETE(request: NextRequest) {
       console.error("Error updating transaction:", updateError);
       return NextResponse.json(
         { error: "Failed to delete recurring transaction" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -149,7 +160,7 @@ export async function DELETE(request: NextRequest) {
     console.error("Error processing request:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

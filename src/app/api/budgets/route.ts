@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../../supabase/server";
+import { RateLimiter } from '@/lib/utils/rate-limit';
+import { validateCsrfToken } from '@/lib/utils/csrf';
 
 // GET /api/budgets - Get all budgets for the current user
 export async function GET(request: NextRequest) {
@@ -23,14 +25,16 @@ export async function GET(request: NextRequest) {
     // Build query
     let query = supabase
       .from("budgets")
-      .select(`
+      .select(
+        `
         *,
         budget_categories(
           id,
           amount,
           category:categories(id, name, type, color)
         )
-      `)
+      `,
+      )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -61,15 +65,19 @@ export async function GET(request: NextRequest) {
       const firstDayOfMonth = new Date(
         monthDate.getFullYear(),
         monthDate.getMonth(),
-        1
-      ).toISOString().split("T")[0];
+        1,
+      )
+        .toISOString()
+        .split("T")[0];
 
       const { data: tracking, error: trackingError } = await supabase
         .from("budget_tracking")
-        .select(`
+        .select(
+          `
           *,
           category:categories(id, name, type, color)
-        `)
+        `,
+        )
         .in("budget_id", budgetIds)
         .eq("month", firstDayOfMonth);
 
@@ -79,7 +87,7 @@ export async function GET(request: NextRequest) {
         // Add tracking data to each budget
         budgets.forEach((budget) => {
           budget.tracking = tracking.filter(
-            (item) => item.budget_id === budget.id
+            (item) => item.budget_id === budget.id,
           );
         });
       }
@@ -90,7 +98,7 @@ export async function GET(request: NextRequest) {
     console.error("Error in budget GET:", error);
     return NextResponse.json(
       { error: "Failed to fetch budgets" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -121,13 +129,19 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validate required fields
-    if (!name || !start_date || !end_date || !categories || categories.length === 0) {
+    if (
+      !name ||
+      !start_date ||
+      !end_date ||
+      !categories ||
+      categories.length === 0
+    ) {
       return NextResponse.json(
         {
           error:
             "Name, start date, end date, and at least one category are required",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -168,7 +182,7 @@ export async function POST(request: NextRequest) {
       await supabase.from("budgets").delete().eq("id", budget.id);
       return NextResponse.json(
         { error: categoriesError.message },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -177,12 +191,14 @@ export async function POST(request: NextRequest) {
     const currentMonth = new Date(
       currentDate.getFullYear(),
       currentDate.getMonth(),
-      1
-    ).toISOString().split("T")[0];
-    
+      1,
+    )
+      .toISOString()
+      .split("T")[0];
+
     const startDate = new Date(start_date);
     const endDate = new Date(end_date);
-    
+
     if (currentDate >= startDate && currentDate <= endDate) {
       const trackingData = categories.map((category: any) => ({
         budget_id: budget.id,
@@ -206,7 +222,7 @@ export async function POST(request: NextRequest) {
     console.error("Error in budget POST:", error);
     return NextResponse.json(
       { error: "Failed to create budget" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -214,14 +230,29 @@ export async function POST(request: NextRequest) {
 // PUT /api/budgets/:id - Update a budget
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
+  // --- Rate limiting ---
+  const rateLimiter = new RateLimiter();
+  const rateLimitResult = await rateLimiter.check(request, 'api');
+  if (!rateLimitResult.success) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+  // --- CSRF validation ---
+  const csrfResult = await validateCsrfToken(request);
+  if (!csrfResult.success) {
+    return NextResponse.json({ error: 'Invalid CSRF token.' }, { status: 403 });
+  }
+
   const supabase = await createClient();
   const url = new URL(request.url);
   const id = url.pathname.split("/").pop();
 
   if (!id) {
-    return NextResponse.json({ error: "Budget ID is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Budget ID is required" },
+      { status: 400 },
+    );
   }
 
   // Check if user is authenticated
@@ -250,7 +281,7 @@ export async function PUT(
     if (!name || !start_date || !end_date) {
       return NextResponse.json(
         { error: "Name, start date, and end date are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -265,7 +296,7 @@ export async function PUT(
     if (fetchError || !existingBudget) {
       return NextResponse.json(
         { error: "Budget not found or access denied" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -310,7 +341,7 @@ export async function PUT(
         console.error("Error updating budget categories:", categoriesError);
         return NextResponse.json(
           { error: categoriesError.message },
-          { status: 500 }
+          { status: 500 },
         );
       }
 
@@ -320,16 +351,18 @@ export async function PUT(
         const currentMonth = new Date(
           currentDate.getFullYear(),
           currentDate.getMonth(),
-          1
-        ).toISOString().split("T")[0];
-        
+          1,
+        )
+          .toISOString()
+          .split("T")[0];
+
         // Delete existing tracking for this month
         await supabase
           .from("budget_tracking")
           .delete()
           .eq("budget_id", id)
           .eq("month", currentMonth);
-        
+
         // Create new tracking entries
         const trackingData = categories.map((category: any) => ({
           budget_id: id,
@@ -348,19 +381,34 @@ export async function PUT(
     console.error("Error in budget PUT:", error);
     return NextResponse.json(
       { error: "Failed to update budget" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 // DELETE /api/budgets/:id - Delete a budget
 export async function DELETE(request: NextRequest) {
+  // --- Rate limiting ---
+  const rateLimiter = new RateLimiter();
+  const rateLimitResult = await rateLimiter.check(request, 'api');
+  if (!rateLimitResult.success) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+  // --- CSRF validation ---
+  const csrfResult = await validateCsrfToken(request);
+  if (!csrfResult.success) {
+    return NextResponse.json({ error: 'Invalid CSRF token.' }, { status: 403 });
+  }
+
   const supabase = await createClient();
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
 
   if (!id) {
-    return NextResponse.json({ error: "Budget ID is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Budget ID is required" },
+      { status: 400 },
+    );
   }
 
   // Check if user is authenticated
@@ -384,7 +432,7 @@ export async function DELETE(request: NextRequest) {
     if (fetchError || !existingBudget) {
       return NextResponse.json(
         { error: "Budget not found or access denied" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -401,7 +449,7 @@ export async function DELETE(request: NextRequest) {
     console.error("Error in budget DELETE:", error);
     return NextResponse.json(
       { error: "Failed to delete budget" },
-      { status: 500 }
+      { status: 500 },
     );
   }
-} 
+}

@@ -1,37 +1,54 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, RefreshCw, CornerDownLeft, LogIn, CalendarDays } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import BudgetInsights from './BudgetInsights';
-import MonthlyTrends from './MonthlyTrends';
-import BudgetRecommendations from './BudgetRecommendations';
-import TaxPreparation from './TaxPreparation';
-import { useBudgetingData } from '@/hooks/useBudgetingData';
-import { createClient } from '@/lib/supabase-browser';
-import { toast } from 'sonner';
+import { useState, useEffect } from "react";
+import {
+  AlertCircle,
+  CalendarDays,
+  CornerDownLeft,
+  LogIn,
+  RefreshCw,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { createClient } from "@/lib/supabase-browser";
+
+import BudgetInsights from "./BudgetInsights";
+import MonthlyTrends from "./MonthlyTrends";
+import BudgetRecommendations from "./BudgetRecommendations";
+import TaxPreparation from "./TaxPreparation";
+
+import { useBudgetingData } from "@/hooks/useBudgetingData";
+import type { BudgetInsight, BudgetRecommendation, MonthlyTrendsData } from "@/types/budgeting";
+import type { CompanySettings } from "@/types/financial";
 
 export default function SmartBudgeting() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [authCheckDone, setAuthCheckDone] = useState(false);
-  const [chatQuery, setChatQuery] = useState('');
+  const [chatQuery, setChatQuery] = useState("");
   const [showTaxBanner, setShowTaxBanner] = useState(false);
-  const [taxDeadline, setTaxDeadline] = useState('');
+  const [taxDeadline, setTaxDeadline] = useState("");
   const [daysToDeadline, setDaysToDeadline] = useState(0);
-  const [countryName, setCountryName] = useState('');
-  
-  const { 
-    budgetInsights, 
-    monthlyTrends, 
-    recommendations, 
-    loading, 
-    error, 
+  const [countryName, setCountryName] = useState("");
+
+  const {
+    budgetInsights,
+    monthlyTrends,
+    recommendations,
+    loading,
+    error,
     refreshData,
     settings,
-    transactions 
+    transactions,
   } = useBudgetingData();
 
   // Check for authentication on component mount
@@ -39,8 +56,11 @@ export default function SmartBudgeting() {
     const checkAuth = async () => {
       try {
         const supabase = createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
         if (userError) {
           console.error("Authentication error:", userError);
           setIsAuthenticated(false);
@@ -54,53 +74,62 @@ export default function SmartBudgeting() {
         setAuthCheckDone(true);
       }
     };
-    
+
     checkAuth();
   }, []);
 
   // Check for approaching tax deadline
   useEffect(() => {
     if (!settings || !settings.country) return;
-    
+
     // Tax deadline data by country code
-    const TAX_DEADLINES: Record<string, { name: string, deadline: string }> = {
-      'US': { name: 'United States', deadline: 'April 15' },
-      'UK': { name: 'United Kingdom', deadline: 'January 31' },
-      'CA': { name: 'Canada', deadline: 'April 30' },
-      'AU': { name: 'Australia', deadline: 'October 31' },
-      'DE': { name: 'Germany', deadline: 'July 31' },
-      'FR': { name: 'France', deadline: 'May 18' },
-      'JP': { name: 'Japan', deadline: 'March 15' },
-      'IN': { name: 'India', deadline: 'July 31' },
-      'SG': { name: 'Singapore', deadline: 'April 15' }
+    const TAX_DEADLINES: Record<string, { name: string; deadline: string }> = {
+      US: { name: "United States", deadline: "April 15" },
+      UK: { name: "United Kingdom", deadline: "January 31" },
+      CA: { name: "Canada", deadline: "April 30" },
+      AU: { name: "Australia", deadline: "October 31" },
+      DE: { name: "Germany", deadline: "July 31" },
+      FR: { name: "France", deadline: "May 18" },
+      JP: { name: "Japan", deadline: "March 15" },
+      IN: { name: "India", deadline: "July 31" },
+      SG: { name: "Singapore", deadline: "April 15" },
     };
-    
+
     const countryCode = settings.country;
     const taxInfo = TAX_DEADLINES[countryCode];
-    
+
     if (!taxInfo) return;
-    
+
     // Calculate days until tax deadline
     const now = new Date();
     const currentYear = now.getFullYear();
-    const [month, day] = taxInfo.deadline.split(' ');
-    
+    const [month, day] = taxInfo.deadline.split(" ");
+
     const monthIndex = [
-      'January', 'February', 'March', 'April', 
-      'May', 'June', 'July', 'August', 
-      'September', 'October', 'November', 'December'
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
     ].indexOf(month);
-    
+
     const deadlineDate = new Date(currentYear, monthIndex, parseInt(day));
-    
+
     // If the deadline has passed for this year, use next year's date
     if (now > deadlineDate) {
       deadlineDate.setFullYear(currentYear + 1);
     }
-    
+
     const timeDiff = deadlineDate.getTime() - now.getTime();
     const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
-    
+
     // Show banner if less than 30 days to deadline
     if (daysRemaining <= 30 && daysRemaining > 0) {
       setShowTaxBanner(true);
@@ -116,23 +145,27 @@ export default function SmartBudgeting() {
     try {
       // Verify user is authenticated before refreshing
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
         toast.error("Authentication failed. Please sign in again.");
         setIsAuthenticated(false);
         return;
       }
-      
+
       setIsAuthenticated(true);
       console.log("Refreshing budgeting data with user ID:", user.id);
-      
+
       // Show loading toast
       toast.loading("Updating budgeting data...", { id: "budget-refresh" });
-      
+
       await refreshData();
-      
-      toast.success("Budgeting data updated successfully", { id: "budget-refresh" });
+
+      toast.success("Budgeting data updated successfully", {
+        id: "budget-refresh",
+      });
     } catch (err) {
       console.error("Error refreshing budgeting data:", err);
       toast.error("Failed to update budgeting data", { id: "budget-refresh" });
@@ -141,11 +174,11 @@ export default function SmartBudgeting() {
 
   const handleChatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!chatQuery.trim()) return;
-    
+
     toast.info("AI budget analysis feature coming soon!");
-    setChatQuery('');
+    setChatQuery("");
   };
 
   // Show loading state if checking auth or data is loading
@@ -173,7 +206,9 @@ export default function SmartBudgeting() {
       <Card>
         <CardHeader>
           <CardTitle>Smart Budgeting</CardTitle>
-          <CardDescription>AI-powered budget analysis and recommendations</CardDescription>
+          <CardDescription>
+            AI-powered budget analysis and recommendations
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
@@ -194,7 +229,9 @@ export default function SmartBudgeting() {
       <Card>
         <CardHeader>
           <CardTitle>Smart Budgeting</CardTitle>
-          <CardDescription>AI-powered budget analysis and recommendations</CardDescription>
+          <CardDescription>
+            AI-powered budget analysis and recommendations
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
@@ -211,22 +248,27 @@ export default function SmartBudgeting() {
   }
 
   // No data available
-  if ((!budgetInsights || budgetInsights.length === 0) && 
-      (!monthlyTrends || monthlyTrends.months.length === 0) &&
-      (!recommendations || recommendations.length === 0)) {
+  if (
+    (!budgetInsights || budgetInsights.length === 0) &&
+    (!monthlyTrends || !monthlyTrends.months || monthlyTrends.months.length === 0) &&
+    (!recommendations || recommendations.length === 0)
+  ) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Smart Budgeting</CardTitle>
-          <CardDescription>AI-powered budget analysis and recommendations</CardDescription>
+          <CardDescription>
+            AI-powered budget analysis and recommendations
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>No Data Available</AlertTitle>
             <AlertDescription>
-              We couldn't find enough transaction data to generate budgeting insights. 
-              Please add more transactions to see AI-powered budget analysis.
+              We couldn't find enough transaction data to generate budgeting
+              insights. Please add more transactions to see AI-powered budget
+              analysis.
             </AlertDescription>
           </Alert>
           <Button onClick={handleRefresh} className="mt-4">
@@ -245,12 +287,15 @@ export default function SmartBudgeting() {
           <AlertTitle>Tax Deadline Approaching!</AlertTitle>
           <AlertDescription className="flex justify-between items-center">
             <span>
-              Your {countryName} tax filing deadline is {taxDeadline} ({daysToDeadline} days remaining).
+              Your {countryName} tax filing deadline is {taxDeadline} (
+              {daysToDeadline} days remaining).
             </span>
-            <Button 
-              size="sm" 
+            <Button
+              size="sm"
               onClick={() => {
-                const taxesTab = document.querySelector('[value="taxes"]') as HTMLElement;
+                const taxesTab = document.querySelector(
+                  '[value="taxes"]',
+                ) as HTMLElement;
                 if (taxesTab) taxesTab.click();
               }}
             >
@@ -302,8 +347,8 @@ export default function SmartBudgeting() {
                 <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                 <h3 className="text-lg font-medium mb-2">No Budget Insights</h3>
                 <p className="text-muted-foreground max-w-md mx-auto">
-                  We couldn't generate budget insights from your transaction data.
-                  Try adding more transactions with categories.
+                  We couldn't generate budget insights from your transaction
+                  data. Try adding more transactions with categories.
                 </p>
                 <Button onClick={handleRefresh} className="mt-4">
                   <RefreshCw className="mr-2 h-4 w-4" /> Try Again
@@ -313,15 +358,17 @@ export default function SmartBudgeting() {
           </TabsContent>
 
           <TabsContent value="trends" className="mt-6">
-            {monthlyTrends && monthlyTrends.months && monthlyTrends.months.length > 0 ? (
+            {monthlyTrends &&
+            monthlyTrends.months &&
+            monthlyTrends.months.length > 0 ? (
               <MonthlyTrends data={monthlyTrends} settings={settings} />
             ) : (
               <div className="text-center py-12">
                 <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                 <h3 className="text-lg font-medium mb-2">No Monthly Trends</h3>
                 <p className="text-muted-foreground max-w-md mx-auto">
-                  We couldn't generate monthly trends from your transaction data.
-                  Try adding transactions across multiple months.
+                  We couldn't generate monthly trends from your transaction
+                  data. Try adding transactions across multiple months.
                 </p>
                 <Button onClick={handleRefresh} className="mt-4">
                   <RefreshCw className="mr-2 h-4 w-4" /> Try Again
@@ -332,14 +379,17 @@ export default function SmartBudgeting() {
 
           <TabsContent value="recommendations" className="mt-6">
             {recommendations && recommendations.length > 0 ? (
-              <BudgetRecommendations recommendations={recommendations} settings={settings} />
+              <BudgetRecommendations
+                recommendations={recommendations}
+                settings={settings}
+              />
             ) : (
               <div className="text-center py-12">
                 <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                 <h3 className="text-lg font-medium mb-2">No Recommendations</h3>
                 <p className="text-muted-foreground max-w-md mx-auto">
-                  We couldn't generate budget recommendations based on your data.
-                  Try adding more transactions with categories.
+                  We couldn't generate budget recommendations based on your
+                  data. Try adding more transactions with categories.
                 </p>
                 <Button onClick={handleRefresh} className="mt-4">
                   <RefreshCw className="mr-2 h-4 w-4" /> Try Again
@@ -354,10 +404,12 @@ export default function SmartBudgeting() {
             ) : (
               <div className="text-center py-12">
                 <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                <h3 className="text-lg font-medium mb-2">Company Settings Required</h3>
+                <h3 className="text-lg font-medium mb-2">
+                  Company Settings Required
+                </h3>
                 <p className="text-muted-foreground max-w-md mx-auto">
-                  Please configure your company settings with country information to 
-                  enable tax preparation features.
+                  Please configure your company settings with country
+                  information to enable tax preparation features.
                 </p>
                 <Button onClick={handleRefresh} className="mt-4">
                   <RefreshCw className="mr-2 h-4 w-4" /> Refresh
@@ -369,4 +421,4 @@ export default function SmartBudgeting() {
       </CardContent>
     </Card>
   );
-} 
+}

@@ -1,9 +1,7 @@
-import DashboardNavbar from "@/components/dashboard-navbar";
-import { InfoIcon, Plus } from "lucide-react";
+import { InfoIcon, Plus, LucideProps } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { createSupabaseClient } from '@/lib/supabase-client';
+import { createServerClient } from "@/lib/supabase/server-client";
 import FinancialOverviewCard from "@/components/dashboard-components/financial-overview-card";
 import RecentTransactions from "@/components/dashboard-components/recent-transactions";
 import AccountsSummary from "@/components/dashboard-components/accounts-summary";
@@ -11,15 +9,21 @@ import CashFlowChart from "@/components/dashboard-components/cash-flow-chart";
 import BudgetWidget from "@/components/dashboard-components/budget-widget";
 import GoalsWidget from "@/components/dashboard-components/goals-widget";
 import { Button } from "@/components/ui/button";
-import { BudgetTracking } from "@/types/financial";
+import type { Database } from "@/types/supabase";
 import { CurrencyCode } from "@/lib/utils";
 import DashboardWrapper from "./dashboard-wrapper";
 import { headers } from "next/headers";
 import FallbackDashboardNew from "@/components/dashboard-components/fallback-dashboard-new";
-import { createClient as createServerClient } from '@supabase/supabase-js';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { LucideProps } from "lucide-react";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
 import ProcessPendingSetup from "@/components/dashboard-components/process-pending-setup";
+import { FinancialGoal } from "@/types/financial";
+import ErrorDisplay from "@/components/error-display";
 
 // Define Icons object with necessary icons
 const Icons = {
@@ -42,179 +46,279 @@ const Icons = {
   ),
 };
 
-export default async function Dashboard() {
-  const supabase = await createClient();
+type Tables = Database['public']['Tables'];
+type DbAccount = Tables['accounts']['Row'];
+type DbTransaction = Tables['transactions']['Row'];
+type DbBudget = Tables['budgets']['Row'];
+type DbBudgetTracking = Tables['budget_tracking']['Row'];
+type DbFinancialGoal = Tables['financial_goals']['Row'];
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+// Extended types for dashboard use
+interface Account {
+  id: string;
+  name: string;
+  type: "checking" | "savings" | "credit" | "investment" | "cash" | "other";
+  balance: number;
+  currency: CurrencyCode;
+  institution: string | null;
+  account_number: string | null;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  previous_balance: number;
+}
 
-  if (!user) {
-    redirect('/auth/sign-in');
-  }
+interface DashboardTransaction extends Omit<DbTransaction, 'type' | 'category'> {
+  type: 'income' | 'expense';
+  category: string;
+}
 
-  // Get company settings
-  const supabaseClient = createSupabaseClient();
-  const { data: settings } = await supabaseClient
-    .from('company_settings')
-    .select('*')
-    .single();
+interface BudgetWithTracking extends DbBudget {
+  budget_id: string;
+  amount: number;
+  spent: number;
+  remaining: number;
+}
 
-  // Use default currency if settings don't exist
-  const currency = settings?.default_currency as CurrencyCode || 'USD';
+interface MonthlyMetric {
+  month: string;
+  income: number;
+  expenses: number;
+  balance: number;
+}
 
-  // Fetch all necessary data
-  const now = new Date();
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const firstDayOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastDayOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+interface AccountBalance {
+  name: string;
+  type: Account['type'];
+  balance: number;
+}
 
-  // Fetch transactions for current and last month
-  const { data: currentMonthTransactions } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('user_id', user.id)
-    .gte('date', firstDayOfMonth.toISOString())
-    .lte('date', lastDayOfMonth.toISOString());
+interface BudgetMetric {
+  budget_id: string;
+  name: string;
+  amount: number;
+  spent: number;
+  remaining: number;
+}
 
-  const { data: lastMonthTransactions } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('user_id', user.id)
-    .gte('date', firstDayOfLastMonth.toISOString())
-    .lte('date', lastDayOfLastMonth.toISOString());
+// Update account filtering and mapping
+const processAccounts = (accounts: DbAccount[] | null): Account[] => {
+  return accounts?.map((account): Account => ({
+    id: account.id,
+    name: account.name,
+    type: account.type,
+    balance: account.balance,
+    currency: account.currency as CurrencyCode,
+    institution: account.institution,
+    account_number: account.account_number,
+    is_active: account.is_active,
+    notes: account.notes,
+    created_at: account.created_at,
+    updated_at: account.updated_at,
+    user_id: account.user_id,
+    previous_balance: account.balance
+  })) || [];
+};
 
-  // Calculate current month metrics
-  const currentMonthRevenue = currentMonthTransactions
-    ?.filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
+// Process transactions for dashboard
+const processDashboardTransactions = (transactions: (DbTransaction & { category: Tables['categories']['Row'] | null })[] | null): DashboardTransaction[] => {
+  return transactions?.filter(t => t.type !== 'transfer').map(t => ({
+    ...t,
+    type: t.type as 'income' | 'expense',
+    category: t.category?.name || ''
+  })) || [];
+};
 
-  const currentMonthExpenses = currentMonthTransactions
-    ?.filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
-
-  // Calculate last month metrics for comparison
-  const lastMonthRevenue = lastMonthTransactions
-    ?.filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
-
-  const lastMonthExpenses = lastMonthTransactions
-    ?.filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
-
-  // Calculate percentage changes
-  const revenueChange = lastMonthRevenue ? ((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0;
-  const expensesChange = lastMonthExpenses ? ((currentMonthExpenses - lastMonthExpenses) / lastMonthExpenses) * 100 : 0;
-  const netProfitChange = lastMonthRevenue ? (((currentMonthRevenue - currentMonthExpenses) - (lastMonthRevenue - lastMonthExpenses)) / (lastMonthRevenue - lastMonthExpenses)) * 100 : 0;
-
-  // Fetch accounts data
-  const { data: accounts } = await supabase
-    .from('accounts')
-    .select('*')
-    .eq('user_id', user.id);
-
-  // Calculate account balances
-  const totalBalance = accounts
-    ?.reduce((sum, account) => sum + (parseFloat(account.balance) || 0), 0) || 0;
-
-  const lastMonthBalance = accounts
-    ?.reduce((sum, account) => sum + (parseFloat(account.previous_balance) || 0), 0) || 0;
-
-  const balanceChange = lastMonthBalance ? ((totalBalance - lastMonthBalance) / lastMonthBalance) * 100 : 0;
-
-  // Fetch accounts receivable and payable
-  const receivableAccounts = accounts?.filter(a => a.type === 'receivable') || [];
-  const payableAccounts = accounts?.filter(a => a.type === 'payable') || [];
-
-  // Fetch recent transactions
-  const { data: recentTransactions } = await supabase
-    .from('transactions')
-    .select(`
-      *,
-      category:categories(*)
-    `)
-    .eq('user_id', user.id)
-    .order('date', { ascending: false })
-    .limit(5);
-
-  // Fetch budgets and tracking data
-  const { data: budgets } = await supabase
-    .from('budgets')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('is_active', true);
-
-  const { data: tracking } = await supabase
-    .from('budget_tracking')
-    .select('*')
-    .eq('user_id', user.id);
-
-  // Fetch active goals
-  const { data: goals } = await supabase
-    .from('goals')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('is_completed', false);
-
-  // Fetch cash flow data for the chart (last 12 months)
-  const firstDayOfYear = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-  const { data: cashFlowTransactions } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('user_id', user.id)
-    .gte('date', firstDayOfYear.toISOString())
-    .lte('date', lastDayOfMonth.toISOString());
-
-  // Process cash flow data
-  const cashFlowData = Array.from({ length: 12 }, (_, i) => {
-    const month = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
-    const monthTransactions = cashFlowTransactions?.filter(t => {
-      const transDate = new Date(t.date);
-      return transDate.getMonth() === month.getMonth() && transDate.getFullYear() === month.getFullYear();
-    }) || [];
-
-    const income = monthTransactions
-      .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-
-    const expenses = monthTransactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-
+// Process budgets with tracking
+const processBudgetTracking = (
+  budgets: DbBudget[] | null,
+  tracking: DbBudgetTracking[] | null
+): BudgetWithTracking[] => {
+  return budgets?.map(budget => {
+    const trackingData = tracking?.find(t => t.budget_id === budget.id);
     return {
-      month: month.toLocaleString('default', { month: 'short' }),
-      income,
-      expenses
+      ...budget,
+      budget_id: budget.id,
+      amount: trackingData?.planned_amount || 0,
+      spent: trackingData?.actual_amount || 0,
+      remaining: (trackingData?.planned_amount || 0) - (trackingData?.actual_amount || 0)
     };
-  });
+  }) || [];
+};
 
-  return (
-    <DashboardWrapper>
-      <main className="flex-1">
-        <div className="flex flex-col gap-4 p-4 md:p-6">
+// Process goals for dashboard
+const processGoals = (goals: DbFinancialGoal[] | null): FinancialGoal[] => {
+  return goals?.map(goal => ({
+    id: goal.id,
+    user_id: goal.user_id,
+    name: goal.name,
+    description: null,
+    target_amount: goal.target_amount,
+    current_amount: goal.current_amount,
+    start_date: goal.created_at,
+    target_date: goal.target_date,
+    is_completed: goal.status === 'completed',
+    is_active: goal.status === 'active',
+    created_at: goal.created_at,
+    updated_at: goal.updated_at,
+    category_id: goal.category_id || null,
+    icon: null,
+    color: null,
+    category: undefined,
+    contributions: []
+  })) || [];
+};
+
+export default async function DashboardPage() {
+  try {
+    const supabase = createServerClient();
+
+    // Get the authenticated user instead of using session.user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError) {
+      console.error('Error getting user:', userError);
+      return <ErrorDisplay message="Error loading user data" />;
+    }
+
+    if (!user) {
+      redirect('/sign-in');
+    }
+
+    // Get company settings and data in parallel
+    const [
+      settingsResult,
+      currentMonthTransactionsResult,
+      lastMonthTransactionsResult,
+      accountsResult
+    ] = await Promise.all([
+      supabase
+        .from("company_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .single(),
+      supabase
+        .from("transactions")
+        .select("*, category:categories(*)")
+        .eq("user_id", user.id)
+        .gte("date", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
+        .lte("date", new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString()),
+      supabase
+        .from("transactions")
+        .select("*, category:categories(*)")
+        .eq("user_id", user.id)
+        .gte("date", new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString())
+        .lte("date", new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString()),
+      supabase
+        .from("accounts")
+        .select("*")
+        .eq("user_id", user.id)
+    ]);
+
+    // Handle errors
+    if (settingsResult.error && settingsResult.error.code !== 'PGRST116') {
+      console.error('Error getting settings:', settingsResult.error);
+      return <ErrorDisplay message="Error loading company settings" />;
+    }
+
+    if (currentMonthTransactionsResult.error) {
+      console.error('Error getting current month transactions:', currentMonthTransactionsResult.error);
+      return <ErrorDisplay message="Error loading transaction data" />;
+    }
+
+    if (lastMonthTransactionsResult.error) {
+      console.error('Error getting last month transactions:', lastMonthTransactionsResult.error);
+      return <ErrorDisplay message="Error loading transaction data" />;
+    }
+
+    if (accountsResult.error) {
+      console.error('Error getting accounts:', accountsResult.error);
+      return <ErrorDisplay message="Error loading account data" />;
+    }
+
+    // Process the data
+    const settings = settingsResult.data;
+    const currency = (settings?.default_currency as CurrencyCode) || "USD";
+    const currentMonthTransactions = currentMonthTransactionsResult.data || [];
+    const lastMonthTransactions = lastMonthTransactionsResult.data || [];
+    const accounts = accountsResult.data || [];
+
+    // Calculate metrics
+    const currentMonthRevenue = currentMonthTransactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const currentMonthExpenses = currentMonthTransactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const lastMonthRevenue = lastMonthTransactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const lastMonthExpenses = lastMonthTransactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Calculate changes
+    const revenueChange = lastMonthRevenue === 0 ? 100 : ((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100;
+    const expensesChange = lastMonthExpenses === 0 ? 100 : ((currentMonthExpenses - lastMonthExpenses) / lastMonthExpenses) * 100;
+    const netProfitChange = lastMonthRevenue - lastMonthExpenses === 0 ? 100 : 
+      (((currentMonthRevenue - currentMonthExpenses) - (lastMonthRevenue - lastMonthExpenses)) / 
+      Math.abs(lastMonthRevenue - lastMonthExpenses)) * 100;
+
+    const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
+    const lastMonthBalance = totalBalance - (currentMonthRevenue - currentMonthExpenses);
+    const balanceChange = lastMonthBalance === 0 ? 100 : 
+      ((totalBalance - lastMonthBalance) / Math.abs(lastMonthBalance)) * 100;
+
+    // Transform accounts to match Account type
+    const transformedAccounts = accounts?.map(account => ({
+      ...account,
+      currency: account.currency as CurrencyCode
+    })) || [];
+
+    // Transform transactions to match Transaction type
+    const transformedTransactions = currentMonthTransactions
+      ?.filter(transaction => transaction.type !== 'transfer')
+      ?.map(transaction => ({
+        id: transaction.id,
+        date: transaction.date,
+        description: transaction.description,
+        amount: transaction.amount,
+        type: transaction.type as 'income' | 'expense',
+        category: transaction.category_id || '',
+        account_id: transaction.account_id,
+        status: transaction.status,
+        notes: transaction.notes || '',
+        user_id: transaction.user_id
+      })) || [];
+
+    return (
+      <DashboardWrapper>
+        <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-4 mb-8">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-bold">
-                {settings?.company_name 
-                  ? `Welcome to ${settings.company_name}'s Dashboard` 
+                {settings?.company_name
+                  ? `Welcome to ${settings.company_name}'s Dashboard`
                   : "Welcome to Your Dashboard"}
               </h1>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">
-                  {new Date().toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
+                  {new Date().toLocaleDateString("en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
                   })}
                 </span>
               </div>
             </div>
             <p className="text-muted-foreground">
-              {budgets?.length === 0 && tracking?.length === 0 && goals?.length === 0
-                ? "Your account has been set up successfully! Start by adding your accounts and transactions to see your financial data here."
-                : "Track your financial performance and manage your budgets all in one place."}
+              Track your financial performance and manage your budgets all in one place.
             </p>
           </div>
 
@@ -255,36 +359,44 @@ export default async function Dashboard() {
 
           {/* Cash Flow Chart */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <CashFlowChart currency={currency} data={cashFlowData} />
+            <CashFlowChart 
+              currency={currency} 
+              data={[
+                { month: "Current", income: currentMonthRevenue, expenses: currentMonthExpenses },
+                { month: "Last", income: lastMonthRevenue, expenses: lastMonthExpenses }
+              ]} 
+            />
             <AccountsSummary
-              title="Accounts Receivable"
-              description="Outstanding customer invoices"
-              accounts={receivableAccounts}
-              type="receivable"
+              title="Checking Accounts"
+              description="Your primary transaction accounts"
+              accounts={transformedAccounts.filter(a => a.type === 'checking')}
               currency={currency}
             />
-            <BudgetWidget 
-              budgets={budgets || []} 
-              tracking={tracking || []}
+            <AccountsSummary
+              title="Savings Accounts"
+              description="Your savings and deposits"
+              accounts={transformedAccounts.filter(a => a.type === 'savings')}
               currency={currency}
             />
           </section>
 
           {/* Recent Transactions */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <RecentTransactions transactions={recentTransactions || []} currency={currency} />
-            <AccountsSummary
-              title="Accounts Payable"
-              description="Bills to be paid"
-              accounts={payableAccounts}
-              type="payable"
+            <RecentTransactions
+              transactions={transformedTransactions}
               currency={currency}
             />
-            <GoalsWidget goals={goals || []} currency={currency} />
+            <AccountsSummary
+              title="Credit Accounts"
+              description="Your credit cards and loans"
+              accounts={transformedAccounts.filter(a => a.type === 'credit')}
+              currency={currency}
+            />
+            <GoalsWidget goals={[]} currency={currency} />
           </section>
 
           {/* Info Section */}
-          {budgets?.length === 0 && tracking?.length === 0 && goals?.length === 0 && (
+          {(!transformedAccounts || transformedAccounts.length === 0) && (
             <section className="bg-blue-50 border border-blue-100 rounded-xl p-6 flex gap-4 items-start">
               <InfoIcon size="20" className="text-blue-500 mt-1" />
               <div>
@@ -292,13 +404,18 @@ export default async function Dashboard() {
                   Getting Started
                 </h3>
                 <p className="text-blue-700">
-                  Your account has been set up successfully! Start by adding your accounts and transactions to see your financial data here. Use the buttons above to get started.
+                  Your account has been set up successfully! Start by adding
+                  your accounts and transactions to see your financial data
+                  here. Use the buttons above to get started.
                 </p>
               </div>
             </section>
           )}
         </div>
-      </main>
-    </DashboardWrapper>
-  );
+      </DashboardWrapper>
+    );
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return <ErrorDisplay message="An unexpected error occurred" />;
+  }
 }

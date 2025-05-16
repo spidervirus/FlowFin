@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../../supabase/server";
+import { RateLimiter } from '@/lib/utils/rate-limit';
+import { validateCsrfToken } from '@/lib/utils/csrf';
 
 // Helper function to calculate next occurrence date based on frequency
 function calculateNextOccurrenceDate(
   startDate: string,
-  frequency: string
+  frequency: string,
 ): string {
   const date = new Date(startDate);
-  
+
   switch (frequency) {
     case "daily":
       date.setDate(date.getDate() + 1);
@@ -30,7 +32,7 @@ function calculateNextOccurrenceDate(
     default:
       return "";
   }
-  
+
   return date.toISOString().split("T")[0];
 }
 
@@ -40,17 +42,22 @@ export async function POST(request: NextRequest) {
   try {
     // Get form data
     const formData = await request.formData();
-    
+
     // Get user ID from form data or from authenticated user
     let userId = formData.get("user_id") as string;
-    
+
     // If no user ID in form data, try to get from authenticated user
     if (!userId) {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         userId = user.id;
       } else {
-        return NextResponse.json({ error: "User ID is required" }, { status: 401 });
+        return NextResponse.json(
+          { error: "User ID is required" },
+          { status: 401 },
+        );
       }
     }
 
@@ -61,34 +68,40 @@ export async function POST(request: NextRequest) {
     const type = formData.get("type") as string;
     const category_id = formData.get("category_id") as string | null;
     // Handle missing or "uncategorized" value as null
-    const effective_category_id = category_id && category_id !== "uncategorized" && category_id.trim() !== "" ? category_id : null;
+    const effective_category_id =
+      category_id &&
+      category_id !== "uncategorized" &&
+      category_id.trim() !== ""
+        ? category_id
+        : null;
     const account_id = formData.get("account_id") as string;
     const notes = (formData.get("notes") as string) || null;
-    
+
     // Log the category information for debugging
     console.log("Category ID from form:", category_id);
     console.log("Effective category ID:", effective_category_id);
-    
+
     // Extract recurring transaction data
     const is_recurring = formData.get("is_recurring") === "on";
     let recurrence_frequency = null;
     let recurrence_start_date = null;
     let recurrence_end_date = null;
     let next_occurrence_date = null;
-    
+
     if (is_recurring) {
       recurrence_frequency = formData.get("recurrence_frequency") as string;
       recurrence_start_date = formData.get("recurrence_start_date") as string;
-      
+
       // Handle optional end date
       const endDateValue = formData.get("recurrence_end_date");
-      recurrence_end_date = endDateValue && endDateValue !== "" ? endDateValue as string : null;
-      
+      recurrence_end_date =
+        endDateValue && endDateValue !== "" ? (endDateValue as string) : null;
+
       // Calculate next occurrence date if we have valid data
       if (recurrence_frequency && recurrence_start_date) {
         next_occurrence_date = calculateNextOccurrenceDate(
-          recurrence_start_date || date, 
-          recurrence_frequency
+          recurrence_start_date || date,
+          recurrence_frequency,
         );
       }
     }
@@ -100,7 +113,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    
+
     // Validate recurring transaction fields if is_recurring is true
     if (is_recurring && !recurrence_frequency) {
       return NextResponse.json(
@@ -164,9 +177,9 @@ export async function POST(request: NextRequest) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    
+
     console.log("Inserting transaction with data:", transactionData);
-    
+
     // First insert the transaction without selecting
     const { error: insertError } = await supabase
       .from("transactions")
@@ -205,9 +218,10 @@ export async function POST(request: NextRequest) {
     if (fetchError) {
       console.error("Error fetching created transaction:", fetchError);
       return NextResponse.json(
-        { 
-          success: true, 
-          message: "Transaction created successfully, but could not retrieve ID" 
+        {
+          success: true,
+          message:
+            "Transaction created successfully, but could not retrieve ID",
         },
         { status: 201 },
       );
@@ -215,10 +229,10 @@ export async function POST(request: NextRequest) {
 
     // Return success response with the created transaction ID
     return NextResponse.json(
-      { 
-        success: true, 
-        message: "Transaction created successfully", 
-        data: { id: data.id } 
+      {
+        success: true,
+        message: "Transaction created successfully",
+        data: { id: data.id },
       },
       { status: 201 },
     );
@@ -234,6 +248,18 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const supabase = await createClient();
 
+  // --- Rate limiting ---
+  const rateLimiter = new RateLimiter();
+  const rateLimitResult = await rateLimiter.check(request, 'api');
+  if (!rateLimitResult.success) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+  // --- CSRF validation ---
+  const csrfResult = await validateCsrfToken(request);
+  if (!csrfResult.success) {
+    return NextResponse.json({ error: 'Invalid CSRF token.' }, { status: 403 });
+  }
+
   // Check if user is authenticated
   const {
     data: { user },
@@ -246,11 +272,16 @@ export async function PUT(request: NextRequest) {
   try {
     // Get JSON data
     const { id, category_id, ...otherUpdates } = await request.json();
-    
+
     // Handle category_id correctly
     const updates = {
       ...otherUpdates,
-      category_id: category_id && category_id !== "uncategorized" && category_id.trim() !== "" ? category_id : null
+      category_id:
+        category_id &&
+        category_id !== "uncategorized" &&
+        category_id.trim() !== ""
+          ? category_id
+          : null,
     };
 
     if (!id) {
@@ -393,9 +424,10 @@ export async function PUT(request: NextRequest) {
 
     if (fetchError) {
       return NextResponse.json(
-        { 
-          success: true, 
-          message: "Transaction updated successfully, but could not retrieve updated data" 
+        {
+          success: true,
+          message:
+            "Transaction updated successfully, but could not retrieve updated data",
         },
         { status: 200 },
       );
@@ -413,6 +445,18 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const supabase = await createClient();
+
+  // --- Rate limiting ---
+  const rateLimiter = new RateLimiter();
+  const rateLimitResult = await rateLimiter.check(request, 'api');
+  if (!rateLimitResult.success) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+  // --- CSRF validation ---
+  const csrfResult = await validateCsrfToken(request);
+  if (!csrfResult.success) {
+    return NextResponse.json({ error: 'Invalid CSRF token.' }, { status: 403 });
+  }
 
   // Check if user is authenticated
   const {

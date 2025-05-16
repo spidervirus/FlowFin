@@ -1,299 +1,252 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { CurrencyCode } from "@/lib/utils";
+import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  Filter,
   Plus,
-  Search,
+  Pencil,
+  Trash2,
+  Calendar,
+  Wallet,
+  Tag,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
-import { createSupabaseClient } from "@/lib/supabase-client";
-import RecurringTransactions from "@/components/transaction-components/recurring-transactions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DashboardWrapper from "../dashboard-wrapper";
-import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 
-// Define a minimal user type for our purposes
-interface MinimalUser {
-  id: string;
-  email?: string;
-}
-
-// Define transaction type
 interface Transaction {
   id: string;
-  date: string;
   description: string;
   amount: number;
-  type: string;
-  status: string;
-  is_recurring: boolean;
-  recurrence_frequency?: string;
-  next_occurrence_date?: string;
-  category?: {
-    id: string;
+  type: "income" | "expense" | "transfer";
+  category_id: string | null;
+  account_id: string;
+  date: string;
+  notes: string | null;
+  status: "pending" | "completed" | "reconciled";
+  is_recurring: boolean | null;
+  recurrence_frequency: "daily" | "weekly" | "monthly" | "yearly" | null;
+  next_occurrence_date: string | null;
+  category: {
+    name: string;
+    type: "income" | "expense" | "transfer";
+  } | null;
+  account: {
     name: string;
     type: string;
-    color: string;
-  };
+    currency: string;
+    code?: string | null;
+  } | null;
+}
+
+interface CompanySettings {
+  id: string;
+  company_name: string;
+  address: string;
+  country: string;
+  default_currency: CurrencyCode;
+  fiscal_year_start: string;
+  industry: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
 }
 
 export default function TransactionsPage() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [user, setUser] = useState<MinimalUser | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [recurringTransactions, setRecurringTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currency, setCurrency] = useState<CurrencyCode>('USD');
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [currency, setCurrency] = useState<CurrencyCode>("USD");
+  const [companySettings, setCompanySettings] =
+    useState<CompanySettings | null>(null);
+  const [deletingTransactionId, setDeletingTransactionId] = useState<
+    string | null
+  >(null);
 
-  // Function to force refresh data
-  const refreshData = () => {
-    console.log("Forcing data refresh");
-    setRefreshKey(prevKey => prevKey + 1);
-  };
+  const supabase = createClient();
 
-  // Function to directly fetch transactions data for a user
-  const fetchTransactionsForUser = async (userId: string) => {
-    console.log("Directly fetching transactions for user:", userId);
+  const fetchData = async () => {
     try {
-      const supabaseClient = createSupabaseClient();
-      const { data, error } = await supabaseClient
-        .from("transactions")
-        .select("*, category:category_id(id, name, type, color)")
-        .eq("user_id", userId)
-        .order("date", { ascending: false });
-        
-      if (error) {
-        console.error("Error in direct fetch:", error);
-        return [];
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Please sign in to view transactions");
+        return;
       }
-      
-      console.log(`Direct fetch returned ${data?.length || 0} transactions:`, data);
-      return data || [];
-    } catch (err) {
-      console.error("Exception in direct fetch:", err);
-      return [];
+
+      // Fetch company settings
+      const { data: settings, error: settingsError } = await supabase
+        .from("company_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
+      if (settingsError) {
+        toast.error("Error fetching company settings");
+        return;
+      }
+
+      if (settings) {
+        setCompanySettings(settings);
+        if (settings.default_currency) {
+          setCurrency(settings.default_currency);
+        }
+      }
+
+      // Fetch transactions with related data
+      const { data: transactionsData, error: transactionsError } =
+        await supabase
+          .from("transactions")
+          .select(
+            `
+          *,
+          category:categories(name, type),
+          account:chart_of_accounts(name, type, currency, code)
+        `
+          )
+          .eq("user_id", user.id)
+          .order("date", { ascending: false });
+
+      if (transactionsError) {
+        console.error("Error fetching transactions:", JSON.stringify(transactionsError, null, 2));
+        toast.error("Error fetching transactions: " + transactionsError.message);
+        return;
+      }
+
+      const transformedTransactions = (transactionsData || []).map(tx => ({
+        ...tx,
+        account: tx.account ? {
+          name: tx.account.name,
+          type: tx.account.type,
+          currency: tx.account.currency,
+          code: tx.account.code,
+        } : null,
+        category: tx.category ? {
+          name: tx.category.name,
+          type: tx.category.type,
+        } : null,
+      }));
+
+      setTransactions(transformedTransactions as Transaction[]);
+    } catch (error) {
+      toast.error("Error fetching data");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Force a refresh when the component mounts or when returning to this page
   useEffect(() => {
-    console.log("Transactions page mounted or pathname changed");
-    
-    // Check if we need to refresh based on localStorage flag
-    const needsRefresh = localStorage.getItem("transactionsNeedRefresh") === "true";
-    if (needsRefresh) {
-      console.log("Found transactionsNeedRefresh flag, clearing and refreshing");
-      // Clear the flag
-      localStorage.removeItem("transactionsNeedRefresh");
-      
-      // If we have a user ID in localStorage, do a direct fetch
-      const userId = localStorage.getItem("currentUserId");
-      const userDataStr = localStorage.getItem("userData");
-      let effectiveUserId = userId;
-      
-      if (!effectiveUserId && userDataStr) {
-        try {
-          const userData = JSON.parse(userDataStr);
-          if (userData?.user?.id) {
-            effectiveUserId = userData.user.id;
-          }
-        } catch (e) {
-          console.error("Error parsing userData:", e);
-        }
-      }
-      
-      if (effectiveUserId) {
-        console.log("Doing direct fetch for user:", effectiveUserId);
-        // Do a direct fetch and update the transactions
-        fetchTransactionsForUser(effectiveUserId).then(freshTransactions => {
-          if (freshTransactions && freshTransactions.length > 0) {
-            console.log("Direct fetch successful, updating transactions:", freshTransactions);
-            setTransactions(freshTransactions as unknown as Transaction[]);
-          }
-        });
-      }
-    }
-    
-    // Force a refresh when the component mounts
-    refreshData();
-    
-  }, [pathname]);
-
-  useEffect(() => {
-    async function fetchData() {
-      console.log("Fetching transactions data, refreshKey:", refreshKey);
-      setLoading(true);
-      
-      try {
-        // Check if user is authenticated
-        const supabaseClient = createSupabaseClient();
-        const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-        
-        let effectiveUser: MinimalUser | null = user ? { id: user.id, email: user.email } : null;
-        
-        // If no user from Supabase, try to get from localStorage
-        if (!effectiveUser) {
-          console.log("No user from Supabase, checking localStorage");
-          
-          // Try to get user ID from localStorage
-          const userId = localStorage.getItem("currentUserId");
-          const userDataStr = localStorage.getItem("userData");
-          let userDataId = null;
-          
-          if (userDataStr) {
-            try {
-              const userData = JSON.parse(userDataStr);
-              if (userData?.user?.id) {
-                userDataId = userData.user.id;
-              }
-            } catch (e) {
-              console.error("Error parsing userData:", e);
-            }
-          }
-          
-          if (userId || userDataId) {
-            // Create a minimal user object with the ID
-            effectiveUser = {
-              id: userId || userDataId || "",
-              email: "user@example.com" // Placeholder email
-            };
-            console.log("Using user ID from localStorage:", effectiveUser.id);
-            
-            // Try to refresh the session
-            try {
-              supabaseClient.auth.refreshSession();
-            } catch (refreshError) {
-              console.error("Error refreshing session:", refreshError);
-            }
-          } else {
-            console.log("No user ID found in localStorage, redirecting to sign-in");
-            router.push('/sign-in');
-            return;
-          }
-        }
-        
-        setUser(effectiveUser);
-        console.log("Set user to:", effectiveUser);
-        
-        // Get company settings
-        const { data: settingsData, error: settingsError } = await supabaseClient
-          .from('company_settings')
-          .select('*')
-          .eq('user_id', effectiveUser.id)
-          .single();
-        
-        if (settingsError) {
-          console.error("Error fetching company settings:", settingsError);
-        }
-        
-        // Set currency from settings or default to USD
-        if (settingsData?.default_currency) {
-          setCurrency(settingsData.default_currency as CurrencyCode);
-        }
-        
-        // Fetch transactions from the database
-        console.log("Fetching transactions for user ID:", effectiveUser.id);
-        
-        // Use a direct query with no caching to ensure fresh data
-        const { data: transactionsData, error } = await supabaseClient
-          .from("transactions")
-          .select("*, category:category_id(id, name, type, color)")
-          .eq("user_id", effectiveUser.id)
-          .order("date", { ascending: false });
-        
-        if (error) {
-          console.error("Error fetching transactions:", error);
-          return;
-        }
-        
-        console.log(`Fetched ${transactionsData?.length || 0} transactions for user ${effectiveUser.id}:`, transactionsData);
-        
-        // Force a re-render by creating a new array and cast to Transaction type
-        if (transactionsData && transactionsData.length > 0) {
-          console.log("Setting transactions state with data:", transactionsData);
-          setTransactions(transactionsData as unknown as Transaction[]);
-        } else {
-          console.log("No transactions found, setting empty array");
-          setTransactions([]);
-        }
-        
-        // Fetch recurring transactions
-        const { data: recurringData, error: recurringError } = await supabaseClient
-          .from("transactions")
-          .select("*, category:category_id(id, name, type, color)")
-          .eq("user_id", effectiveUser.id)
-          .eq("is_recurring", true)
-          .order("next_occurrence_date", { ascending: true });
-        
-        if (recurringError) {
-          console.error("Error fetching recurring transactions:", recurringError);
-          return;
-        }
-        
-        console.log(`Fetched ${recurringData?.length || 0} recurring transactions for user ${effectiveUser.id}`);
-        
-        // Set recurring transactions
-        if (recurringData && recurringData.length > 0) {
-          setRecurringTransactions(recurringData as unknown as Transaction[]);
-        } else {
-          setRecurringTransactions([]);
-        }
-        
-      } catch (error) {
-        console.error("Error in fetchData:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchData();
-  }, [refreshKey, router]);
+
+    // Subscribe to changes
+    const transactionsSubscription = supabase
+      .channel("transactions_channel")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "transactions",
+        },
+        () => {
+          fetchData();
+        },
+      )
+      .subscribe();
+
+    const settingsSubscription = supabase
+      .channel("settings_channel")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "company_settings",
+        },
+        () => {
+          fetchData();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      transactionsSubscription.unsubscribe();
+      settingsSubscription.unsubscribe();
+    };
+  }, []);
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    try {
+      setDeletingTransactionId(transactionId);
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("id", transactionId);
+
+      if (error) throw error;
+      toast.success("Transaction deleted successfully");
+      fetchData();
+    } catch (error) {
+      toast.error("Error deleting transaction");
+    } finally {
+      setDeletingTransactionId(null);
+    }
+  };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat(CURRENCY_CONFIG[currency]?.locale || 'en-US', {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
-      minimumFractionDigits: CURRENCY_CONFIG[currency]?.minimumFractionDigits ?? 2,
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+  const getTransactionTypeColor = (type: Transaction["type"]) => {
+    switch (type) {
+      case "income":
+        return "text-green-500";
+      case "expense":
+        return "text-red-500";
+      case "transfer":
+        return "text-blue-500";
+      default:
+        return "text-gray-500";
+    }
   };
+
+  const calculateTotal = (type: "income" | "expense") => {
+    return transactions
+      .filter((t) => t.type === type)
+      .reduce((sum, t) => sum + t.amount, 0);
+  };
+
+  const totalIncome = calculateTotal("income");
+  const totalExpense = calculateTotal("expense");
+  const netAmount = totalIncome - totalExpense;
 
   if (loading) {
     return (
       <DashboardWrapper>
-        <div className="flex justify-center items-center h-[60vh]">
-          <p className="text-lg">Loading transactions...</p>
+        <div className="flex items-center justify-center h-full">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
         </div>
       </DashboardWrapper>
     );
@@ -301,277 +254,527 @@ export default function TransactionsPage() {
 
   return (
     <DashboardWrapper>
-      <div className="flex flex-col gap-8">
-        {/* Header Section */}
-        <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Transactions</h1>
-            <p className="text-muted-foreground">
-              Manage and track your financial transactions
-            </p>
-            {/* Debug info - remove in production */}
-            <div className="text-xs text-muted-foreground mt-1">
-              User ID: {user?.id || 'Not set'} | 
-              Transactions: {transactions.length} | 
-              <Button 
-                variant="link" 
-                className="text-xs p-0 h-auto" 
-                onClick={refreshData}
-              >
-                Refresh
-              </Button>
+      <div className="space-y-8">
+        <div>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight">
+                Transactions
+              </h2>
+              <p className="text-muted-foreground">
+                View and manage your financial transactions
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              {companySettings && (
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Company</p>
+                  <p className="text-lg font-semibold">
+                    {companySettings.company_name}
+                  </p>
+                </div>
+              )}
+              <Link href="/dashboard/transactions/new">
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" /> Add Transaction
+                </Button>
+              </Link>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={refreshData}>
-              Refresh
-            </Button>
-            <Link href="/dashboard/transactions/import">
-              <Button variant="outline">
-                <ArrowDownLeft className="mr-2 h-4 w-4" /> Import
-              </Button>
-            </Link>
-            <Link href="/dashboard/transactions/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" /> Add Transaction
-              </Button>
-            </Link>
-          </div>
-        </header>
+        </div>
 
-        {/* Tabs for All Transactions and Recurring */}
-        <Tabs defaultValue="all">
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Income
+              </CardTitle>
+              <ArrowUpRight className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {formatCurrency(totalIncome)}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Expenses
+              </CardTitle>
+              <ArrowDownRight className="h-4 w-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {formatCurrency(totalExpense)}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Net Amount</CardTitle>
+              <ArrowUpRight
+                className={`h-4 w-4 ${netAmount >= 0 ? "text-green-500" : "text-red-500"}`}
+              />
+            </CardHeader>
+            <CardContent>
+              <div
+                className={`text-2xl font-bold ${netAmount >= 0 ? "text-green-500" : "text-red-500"}`}
+              >
+                {formatCurrency(netAmount)}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="all" className="space-y-4">
           <TabsList>
             <TabsTrigger value="all">All Transactions</TabsTrigger>
-            <TabsTrigger value="recurring">Recurring</TabsTrigger>
+            <TabsTrigger value="income">Income</TabsTrigger>
+            <TabsTrigger value="expense">Expenses</TabsTrigger>
+            <TabsTrigger value="transfer">Transfers</TabsTrigger>
           </TabsList>
-          
-          <TabsContent value="all" className="space-y-8 mt-6">
-            {/* Filters Section */}
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row gap-4 items-end">
-                  <div className="flex-1 space-y-2">
-                    <label className="text-sm font-medium">Search</label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        placeholder="Search transactions..."
-                        className="pl-10"
-                      />
+          <TabsContent value="all" className="space-y-4">
+            <div className="grid gap-4">
+              {transactions.map((transaction) => (
+                <Card
+                  key={transaction.id}
+                  className="hover:shadow-md transition-shadow"
+                >
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <div className="flex items-center space-x-4">
+                      <div
+                        className={`p-2 rounded-full ${transaction.type === "income" ? "bg-green-100" : transaction.type === "expense" ? "bg-red-100" : "bg-blue-100"}`}
+                      >
+                        {transaction.type === "income" ? (
+                          <ArrowUpRight className="h-4 w-4 text-green-500" />
+                        ) : transaction.type === "expense" ? (
+                          <ArrowDownRight className="h-4 w-4 text-red-500" />
+                        ) : (
+                          <ArrowUpRight className="h-4 w-4 text-blue-500" />
+                        )}
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-medium">
+                          {transaction.description}
+                        </CardTitle>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(transaction.date).toLocaleDateString()}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Wallet className="h-3 w-3" />
+                            {transaction.account?.name || "Unknown Account"}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Tag className="h-3 w-3" />
+                            {transaction.category?.name || "Uncategorized"}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="w-full md:w-48 space-y-2">
-                    <label className="text-sm font-medium">Type</label>
-                    <Select defaultValue="all">
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Types" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Types</SelectItem>
-                        <SelectItem value="income">Income</SelectItem>
-                        <SelectItem value="expense">Expense</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="w-full md:w-48 space-y-2">
-                    <label className="text-sm font-medium">Category</label>
-                    <Select defaultValue="all">
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Categories" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Categories</SelectItem>
-                        <SelectItem value="sales">Sales</SelectItem>
-                        <SelectItem value="office">Office</SelectItem>
-                        <SelectItem value="software">Software</SelectItem>
-                        <SelectItem value="utilities">Utilities</SelectItem>
-                        <SelectItem value="marketing">Marketing</SelectItem>
-                        <SelectItem value="rent">Rent</SelectItem>
-                        <SelectItem value="payroll">Payroll</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="w-full md:w-48 space-y-2">
-                    <label className="text-sm font-medium">Status</label>
-                    <Select defaultValue="all">
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button variant="outline" size="icon" className="h-10 w-10">
-                    <Filter className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Transactions Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Transaction History</CardTitle>
-                <CardDescription>
-                  A list of all your recent transactions
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {transactions.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <div className="text-center max-w-md">
-                      <h2 className="text-xl font-semibold mb-2">No Transactions Yet</h2>
-                      <p className="text-muted-foreground mb-6">
-                        You haven't added any transactions yet. Add your first transaction to start tracking your finances.
-                      </p>
-                      <Link href="/dashboard/transactions/new">
-                        <Button>
-                          <Plus className="mr-2 h-4 w-4" /> Add Your First Transaction
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`text-sm font-medium ${getTransactionTypeColor(transaction.type)}`}
+                      >
+                        {formatCurrency(transaction.amount)}
+                      </div>
+                      <Link
+                        href={`/dashboard/transactions/${transaction.id}/edit`}
+                      >
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Pencil className="h-4 w-4" />
                         </Button>
                       </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">
-                            Date
-                          </th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">
-                            Description
-                          </th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">
-                            Category
-                          </th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">
-                            Amount
-                          </th>
-                          <th className="text-left py-3 px-4 font-medium text-muted-foreground">
-                            Status
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {transactions.map((transaction) => (
-                          <tr
-                            key={transaction.id}
-                            className="border-b hover:bg-gray-50"
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-600"
                           >
-                            <td className="py-3 px-4">
-                              {formatDate(transaction.date)}
-                            </td>
-                            <td className="py-3 px-4">
-                              <div className="flex items-center">
-                                <div
-                                  className={`mr-3 p-1.5 rounded-full ${
-                                    transaction.type === "income"
-                                      ? "bg-green-100"
-                                      : transaction.type === "expense"
-                                      ? "bg-red-100"
-                                      : "bg-blue-100"
-                                  }`}
-                                >
-                                  {transaction.type === "income" ? (
-                                    <ArrowUpRight className="h-4 w-4 text-green-600" />
-                                  ) : transaction.type === "expense" ? (
-                                    <ArrowDownLeft className="h-4 w-4 text-red-600" />
-                                  ) : (
-                                    <ArrowUpRight className="h-4 w-4 text-blue-600" />
-                                  )}
-                                </div>
-                                {transaction.description}
-                                {transaction.is_recurring && (
-                                  <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                                    Recurring
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3 px-4">
-                              {transaction.category?.name || "Uncategorized"}
-                            </td>
-                            <td
-                              className={`py-3 px-4 font-medium ${
-                                transaction.type === "income"
-                                  ? "text-green-600"
-                                  : transaction.type === "expense"
-                                  ? "text-red-600"
-                                  : "text-blue-600"
-                              }`}
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Delete Transaction
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete this transaction?
+                              This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() =>
+                                handleDeleteTransaction(transaction.id)
+                              }
+                              className="bg-red-500 hover:bg-red-600"
+                              disabled={
+                                deletingTransactionId === transaction.id
+                              }
                             >
-                              {transaction.type === "income"
-                                ? "+"
-                                : transaction.type === "expense"
-                                ? "-"
-                                : ""}
-                              {formatCurrency(transaction.amount)}
-                            </td>
-                            <td className="py-3 px-4">
-                              <span
-                                className={`inline-block px-2 py-1 text-xs rounded-full ${
-                                  transaction.status === "completed"
-                                    ? "bg-green-100 text-green-800"
-                                    : transaction.status === "pending"
-                                    ? "bg-yellow-100 text-yellow-800"
-                                    : "bg-blue-100 text-blue-800"
-                                }`}
-                              >
-                                {transaction.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                              {deletingTransactionId === transaction.id
+                                ? "Deleting..."
+                                : "Delete"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </CardHeader>
+                  {transaction.notes && (
+                    <CardContent className="pt-0">
+                      <p className="text-sm text-muted-foreground">
+                        {transaction.notes}
+                      </p>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
+            </div>
           </TabsContent>
-          
-          <TabsContent value="recurring" className="mt-6">
-            {/* Make sure we're passing valid data to RecurringTransactions */}
-            {recurringTransactions.length > 0 ? (
-              <RecurringTransactions 
-                transactions={recurringTransactions
-                  .filter(t => t.recurrence_frequency && t.next_occurrence_date)
-                  .map(t => ({
-                    id: t.id,
-                    description: t.description,
-                    amount: t.amount,
-                    type: t.type,
-                    recurrence_frequency: t.recurrence_frequency || 'monthly',
-                    next_occurrence_date: t.next_occurrence_date || '',
-                    category: {
-                      name: t.category?.name || 'Uncategorized',
-                      type: t.category?.type || 'expense'
-                    }
-                  }))} 
-                currency={currency} 
-              />
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recurring Transactions</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center py-6">
-                    <p className="text-muted-foreground mb-4">No recurring transactions found</p>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Set up recurring transactions for bills, subscriptions, or regular income.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+          <TabsContent value="income" className="space-y-4">
+            <div className="grid gap-4">
+              {transactions
+                .filter((t) => t.type === "income")
+                .map((transaction) => (
+                  <Card
+                    key={transaction.id}
+                    className="hover:shadow-md transition-shadow"
+                  >
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <div className="flex items-center space-x-4">
+                        <div
+                          className={`p-2 rounded-full ${transaction.type === "income" ? "bg-green-100" : "bg-red-100"}`}
+                        >
+                          {transaction.type === "income" ? (
+                            <ArrowUpRight className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <ArrowDownRight className="h-4 w-4 text-red-500" />
+                          )}
+                        </div>
+                        <div>
+                          <CardTitle className="text-sm font-medium">
+                            {transaction.description}
+                          </CardTitle>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(transaction.date).toLocaleDateString()}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Wallet className="h-3 w-3" />
+                              {transaction.account?.name || "Unknown Account"}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Tag className="h-3 w-3" />
+                              {transaction.category?.name || "Uncategorized"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`text-sm font-medium ${getTransactionTypeColor(transaction.type)}`}
+                        >
+                          {formatCurrency(transaction.amount)}
+                        </div>
+                        <Link
+                          href={`/dashboard/transactions/${transaction.id}/edit`}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-500 hover:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Delete Transaction
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this
+                                transaction? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() =>
+                                  handleDeleteTransaction(transaction.id)
+                                }
+                                className="bg-red-500 hover:bg-red-600"
+                                disabled={
+                                  deletingTransactionId === transaction.id
+                                }
+                              >
+                                {deletingTransactionId === transaction.id
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </CardHeader>
+                    {transaction.notes && (
+                      <CardContent className="pt-0">
+                        <p className="text-sm text-muted-foreground">
+                          {transaction.notes}
+                        </p>
+                      </CardContent>
+                    )}
+                  </Card>
+                ))}
+            </div>
+          </TabsContent>
+          <TabsContent value="expense" className="space-y-4">
+            <div className="grid gap-4">
+              {transactions
+                .filter((t) => t.type === "expense")
+                .map((transaction) => (
+                  <Card
+                    key={transaction.id}
+                    className="hover:shadow-md transition-shadow"
+                  >
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <div className="flex items-center space-x-4">
+                        <div
+                          className={`p-2 rounded-full ${transaction.type === "income" ? "bg-green-100" : "bg-red-100"}`}
+                        >
+                          {transaction.type === "income" ? (
+                            <ArrowUpRight className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <ArrowDownRight className="h-4 w-4 text-red-500" />
+                          )}
+                        </div>
+                        <div>
+                          <CardTitle className="text-sm font-medium">
+                            {transaction.description}
+                          </CardTitle>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(transaction.date).toLocaleDateString()}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Wallet className="h-3 w-3" />
+                              {transaction.account?.name || "Unknown Account"}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Tag className="h-3 w-3" />
+                              {transaction.category?.name || "Uncategorized"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`text-sm font-medium ${getTransactionTypeColor(transaction.type)}`}
+                        >
+                          {formatCurrency(transaction.amount)}
+                        </div>
+                        <Link
+                          href={`/dashboard/transactions/${transaction.id}/edit`}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-500 hover:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Delete Transaction
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this
+                                transaction? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() =>
+                                  handleDeleteTransaction(transaction.id)
+                                }
+                                className="bg-red-500 hover:bg-red-600"
+                                disabled={
+                                  deletingTransactionId === transaction.id
+                                }
+                              >
+                                {deletingTransactionId === transaction.id
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </CardHeader>
+                    {transaction.notes && (
+                      <CardContent className="pt-0">
+                        <p className="text-sm text-muted-foreground">
+                          {transaction.notes}
+                        </p>
+                      </CardContent>
+                    )}
+                  </Card>
+                ))}
+            </div>
+          </TabsContent>
+          <TabsContent value="transfer" className="space-y-4">
+            <div className="grid gap-4">
+              {transactions
+                .filter((t) => t.type === "transfer")
+                .map((transaction) => (
+                  <Card
+                    key={transaction.id}
+                    className="hover:shadow-md transition-shadow"
+                  >
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <div className="flex items-center space-x-4">
+                        <div className="p-2 rounded-full bg-blue-100">
+                          <ArrowUpRight className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-sm font-medium">
+                            {transaction.description}
+                          </CardTitle>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(transaction.date).toLocaleDateString()}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Wallet className="h-3 w-3" />
+                              {transaction.account?.name || "Unknown Account"}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Tag className="h-3 w-3" />
+                              {transaction.category?.name || "Uncategorized"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-medium text-blue-500">
+                          {formatCurrency(transaction.amount)}
+                        </div>
+                        <Link
+                          href={`/dashboard/transactions/${transaction.id}/edit`}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-500 hover:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Delete Transaction
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this
+                                transaction? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() =>
+                                  handleDeleteTransaction(transaction.id)
+                                }
+                                className="bg-red-500 hover:bg-red-600"
+                                disabled={
+                                  deletingTransactionId === transaction.id
+                                }
+                              >
+                                {deletingTransactionId === transaction.id
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </CardHeader>
+                    {transaction.notes && (
+                      <CardContent className="pt-0">
+                        <p className="text-sm text-muted-foreground">
+                          {transaction.notes}
+                        </p>
+                      </CardContent>
+                    )}
+                  </Card>
+                ))}
+            </div>
           </TabsContent>
         </Tabs>
+
+        {transactions.length === 0 && (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <div className="text-center max-w-md">
+                <h3 className="text-xl font-semibold mb-2">
+                  No Transactions Yet
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Add your first transaction to start tracking your finances.
+                </p>
+                <Link href="/dashboard/transactions/new">
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" /> Add Your First Transaction
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </DashboardWrapper>
   );

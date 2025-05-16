@@ -1,56 +1,409 @@
-import { createClient } from "../../supabase/client";
-import {
-  Account,
-  Transaction,
-  Category,
-  ReportFilter,
-  ReportData,
-  ReconciliationItem,
-} from "@/types/financial";
+import { createClient } from "@/lib/supabase/client";
+import type { Database } from "@/lib/supabase/database.types";
+import { CurrencyCode } from "@/lib/utils";
+import { SupabaseClient } from "@supabase/supabase-js";
 
-const supabase = createClient();
-
-// Accounts Management
-export async function getAccounts() {
-  const { data, error } = await supabase
-    .from("accounts")
-    .select("*")
-    .order("name");
-
-  if (error) throw error;
-  return data;
+// Custom error class for financial operations
+export class FinancialError extends Error {
+  constructor(message: string, public cause?: unknown) {
+    super(message);
+    this.name = "FinancialError";
+  }
 }
 
-export async function getAccount(id: string) {
-  const { data, error } = await supabase
-    .from("accounts")
-    .select("*")
-    .eq("id", id)
-    .single();
+// Supabase client singleton with proper typing
+let supabaseInstance: SupabaseClient<Database> | null = null;
 
-  if (error) throw error;
-  return data;
+function getSupabaseClient(): SupabaseClient<Database> {
+  if (!supabaseInstance) {
+    try {
+      supabaseInstance = createClient();
+      
+      // Validate client initialization
+      if (!supabaseInstance.auth || !supabaseInstance.from) {
+        throw new Error("Supabase client not properly initialized");
+      }
+    } catch (error) {
+      throw new FinancialError("Failed to initialize Supabase client", error);
+    }
+  }
+  return supabaseInstance;
 }
 
-export async function createAccount(account: Partial<Account>) {
-  const { data, error } = await supabase
-    .from("accounts")
-    .insert([
-      {
-        ...account,
+// Helper function to validate client connection before operations
+async function validateClientConnection(): Promise<void> {
+  try {
+    const client = getSupabaseClient();
+    // Simple query to validate connection
+    await client.from("accounts").select("id").limit(1);
+  } catch (error) {
+    throw new FinancialError("Failed to validate database connection", error);
+  }
+}
+
+// Type definitions
+export type TransactionType = "income" | "expense" | "transfer";
+export type AccountType = "checking" | "savings" | "credit" | "investment" | "cash" | "other";
+export type RecurrenceFrequency = "daily" | "weekly" | "monthly" | "yearly";
+export type TransactionStatus = "pending" | "completed" | "reconciled";
+
+// Base types
+export interface Employee {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  position?: string;
+  department?: string;
+  status?: "active" | "inactive";
+  salary?: number;
+  hire_date?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CompanySettings {
+  id: string;
+  user_id: string;
+  company_name: string;
+  address: string;
+  country: string;
+  default_currency: CurrencyCode;
+  fiscal_year_start: string;
+  industry: string;
+  phone_number?: string;
+  company_size?: string;
+  tax_rate?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Account {
+  id?: string;
+  user_id: string;
+  name: string;
+  type: AccountType;
+  balance: number;
+  currency: string;
+  institution?: string | null;
+  account_number?: string | null;
+  is_active?: boolean;
+  notes?: string | null;
+  code?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Transaction {
+  id?: string;
+  user_id: string;
+  date: string;
+  description: string;
+  amount: number;
+  type: TransactionType;
+  category_id: string | null;
+  account_id: string;
+  status: TransactionStatus;
+  notes: string | null;
+  is_recurring: boolean | null;
+  recurrence_frequency: RecurrenceFrequency | null;
+  next_occurrence_date: string | null;
+  created_at?: string;
+  updated_at: string;
+  category?: Category | null;
+}
+
+export interface Category {
+  id?: string;
+  user_id: string;
+  name: string;
+  type: "income" | "expense";
+  description?: string | null;
+  color?: string | null;
+  parent_id?: string | null;
+  is_active: boolean;
+  is_default?: boolean;
+  created_at?: string;
+  updated_at: string;
+}
+
+// Report Types
+export interface ReportFilter {
+  startDate?: string;
+  endDate?: string;
+  accounts?: string[];
+  categories?: string[];
+  type?: "all" | TransactionType;
+}
+
+export interface CategorySummary {
+  id: string;
+  name: string;
+  amount: number;
+  transactions: Transaction[];
+}
+
+export interface DailyTransactionSummary {
+  date: string;
+  income: number;
+  expense: number;
+  net: number;
+  transactions: Transaction[];
+  balance?: number;
+}
+
+export interface ReportData {
+  title: string;
+  dateRange: {
+    start: string;
+    end: string;
+  };
+  summary: {
+    totalIncome: number;
+    totalExpenses: number;
+    netProfit: number;
+    profitMargin: number;
+  };
+  data: {
+    categorySummary?: {
+      income: Record<string, CategorySummary>;
+      expense: Record<string, CategorySummary>;
+    };
+    transactions?: Transaction[];
+    assets?: number;
+    liabilities?: number;
+    equity?: number;
+    accountsByType?: Record<string, Account[]>;
+    accounts?: Account[];
+    cashFlowByDate?: DailyTransactionSummary[];
+  };
+}
+
+export interface Reconciliation {
+  id?: string;
+  user_id: string;
+  account_id: string;
+  statement_date: string;
+  statement_balance: number;
+  is_completed?: boolean | null;
+  completed_at?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at: string;
+}
+
+export interface ReconciliationItem {
+  id?: string;
+  reconciliation_id: string;
+  transaction_id: string;
+  is_reconciled: boolean;
+  reconciled_at: string | null;
+  created_at?: string;
+  updated_at: string;
+  transaction?: {
+    id: string;
+    date: string;
+    description: string;
+    amount: number;
+    type: TransactionType;
+    category_id: string | null;
+    account_id: string;
+    status: TransactionStatus;
+    notes: string | null;
+    is_recurring: boolean;
+    recurrence_frequency: RecurrenceFrequency | null;
+    next_occurrence_date: string | null;
+    user_id: string;
+    created_at: string;
+    updated_at: string;
+  } | null;
+}
+
+// Replace the direct client initialization with the getter
+const getClient = () => {
+  try {
+    return getSupabaseClient();
+  } catch (error) {
+    throw new FinancialError("Failed to get Supabase client", error);
+  }
+};
+
+// Function types
+interface CreateTransactionInput {
+  user_id: string;
+  account_id: string;
+  amount: number;
+  type: TransactionType;
+  description: string;
+  date: string;
+  category_id?: string | null;
+  notes?: string | null;
+  is_recurring?: boolean | null;
+  recurrence_frequency?: RecurrenceFrequency | null;
+  next_occurrence_date?: string | null;
+  status?: TransactionStatus;
+}
+
+export async function createTransaction(transaction: CreateTransactionInput) {
+  const supabase = getClient();
+  
+  try {
+    await validateClientConnection();
+    
+    // Validate required fields
+    const requiredFields = ['user_id', 'account_id', 'amount', 'type', 'description', 'date'] as const;
+    const missingFields = requiredFields.filter(field => !transaction[field]);
+    
+    if (missingFields.length > 0) {
+      throw new FinancialError(`Missing required transaction fields: ${missingFields.join(', ')}`);
+    }
+
+    if (transaction.amount <= 0) {
+      throw new FinancialError("Transaction amount must be positive");
+    }
+
+    if (!["income", "expense", "transfer"].includes(transaction.type)) {
+      throw new FinancialError("Invalid transaction type");
+    }
+
+    // Start a transaction to update account balance
+    const { data: accountData, error: accountError } = await supabase
+      .from("accounts")
+      .select("balance")
+      .eq("id", transaction.account_id)
+      .single();
+
+    if (accountError) throw new FinancialError("Failed to fetch account", accountError);
+    if (!accountData) throw new FinancialError("Account not found");
+
+    // Calculate new balance
+    let newBalance = accountData.balance;
+    if (transaction.type === "income") {
+      newBalance += transaction.amount;
+    } else if (transaction.type === "expense") {
+      newBalance -= transaction.amount;
+      if (newBalance < 0) {
+        console.warn("Account balance will be negative", {
+          accountId: transaction.account_id,
+          currentBalance: accountData.balance,
+          transactionAmount: transaction.amount,
+        });
+      }
+    }
+
+    // Update account balance
+    const { error: updateError } = await supabase
+      .from("accounts")
+      .update({ balance: newBalance, updated_at: new Date().toISOString() })
+      .eq("id", transaction.account_id);
+
+    if (updateError) throw new FinancialError("Failed to update account balance", updateError);
+
+    // Create the transaction with default values for optional fields
+    const transactionData = {
+      ...transaction,
+      status: transaction.status || "pending",
+      is_recurring: transaction.is_recurring || false,
+      notes: transaction.notes || null,
+      category_id: transaction.category_id || null,
+      recurrence_frequency: transaction.recurrence_frequency || null,
+      next_occurrence_date: transaction.next_occurrence_date || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from("transactions")
+      .insert([transactionData])
+      .select()
+      .single();
+
+    if (error) throw new FinancialError("Failed to create transaction", error);
+    return data;
+  } catch (error) {
+    if (error instanceof FinancialError) {
+      throw error;
+    }
+    throw new FinancialError("Unexpected error during transaction creation", error);
+  }
+}
+
+export async function updateTransaction(
+  id: string,
+  updates: Partial<Transaction>,
+  originalTransaction: Transaction,
+) {
+  // If we're updating amount, type, or account, we need to adjust account balances
+  if (
+    originalTransaction &&
+    (updates.amount !== undefined ||
+      updates.type !== undefined ||
+      updates.account_id !== undefined)
+  ) {
+    // Revert original transaction effect on original account
+    const { data: originalAccountData, error: originalAccountError } =
+      await getClient()
+        .from("accounts")
+        .select("balance")
+        .eq("id", originalTransaction.account_id)
+        .single();
+
+    if (originalAccountError) throw originalAccountError;
+
+    let originalAccountNewBalance = originalAccountData.balance;
+    if (originalTransaction.type === "income") {
+      originalAccountNewBalance -= originalTransaction.amount;
+    } else if (originalTransaction.type === "expense") {
+      originalAccountNewBalance += originalTransaction.amount;
+    }
+
+    // Update original account balance
+    const { error: updateOriginalError } = await getClient()
+      .from("accounts")
+      .update({
+        balance: originalAccountNewBalance,
         updated_at: new Date().toISOString(),
-      },
-    ])
-    .select()
-    .single();
+      })
+      .eq("id", originalTransaction.account_id);
 
-  if (error) throw error;
-  return data;
-}
+    if (updateOriginalError) throw updateOriginalError;
 
-export async function updateAccount(id: string, updates: Partial<Account>) {
-  const { data, error } = await supabase
-    .from("accounts")
+    // If account changed, apply new transaction to new account
+    const targetAccountId =
+      updates.account_id || originalTransaction.account_id;
+    const transactionType = updates.type || originalTransaction.type;
+    const transactionAmount = updates.amount || originalTransaction.amount;
+
+    const { data: targetAccountData, error: targetAccountError } =
+      await getClient()
+        .from("accounts")
+        .select("balance")
+        .eq("id", targetAccountId)
+        .single();
+
+    if (targetAccountError) throw targetAccountError;
+
+    let targetAccountNewBalance = targetAccountData.balance;
+    if (transactionType === "income") {
+      targetAccountNewBalance += transactionAmount;
+    } else if (transactionType === "expense") {
+      targetAccountNewBalance -= transactionAmount;
+    }
+
+    // Update target account balance
+    const { error: updateTargetError } = await getClient()
+      .from("accounts")
+      .update({
+        balance: targetAccountNewBalance,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", targetAccountId);
+
+    if (updateTargetError) throw updateTargetError;
+  }
+
+  // Update the transaction
+  const { data, error } = await getClient()
+    .from("transactions")
     .update({
       ...updates,
       updated_at: new Date().toISOString(),
@@ -63,10 +416,84 @@ export async function updateAccount(id: string, updates: Partial<Account>) {
   return data;
 }
 
-export async function deleteAccount(id: string) {
-  const { error } = await supabase.from("accounts").delete().eq("id", id);
+// Accounts Management
+export async function getAccounts() {
+  const { data, error } = await getClient()
+    .from("chart_of_accounts")
+    .select("*")
+    .order("name");
 
-  if (error) throw error;
+  if (error) throw new FinancialError("Failed to fetch accounts", error);
+  return data as Account[];
+}
+
+export async function getAccountById(id: string) {
+  if (!id) {
+    throw new FinancialError("Account ID is required to fetch an account.");
+  }
+  const { data, error } = await getClient()
+    .from("chart_of_accounts")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    throw new FinancialError("Failed to fetch account by ID", error);
+  }
+  return data as Account | null;
+}
+
+export async function createAccount(
+  account: Omit<Account, "id" | "created_at" | "updated_at"> & { user_id: string }
+) {
+  const { id, ...accountData } = account as Account;
+
+  const { data, error } = await getClient()
+    .from("chart_of_accounts")
+    .insert([
+      {
+        ...accountData,
+        balance: accountData.balance || 0,
+        currency: accountData.currency || "USD",
+        is_active: accountData.is_active ?? true,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw new FinancialError("Failed to create account", error);
+  return data as Account;
+}
+
+export async function updateAccount(id: string, updates: Partial<Omit<Account, "id" | "user_id" | "created_at">>) {
+  if (!id) {
+    throw new FinancialError("Account ID is required for updates.");
+  }
+  const { error } = await getClient()
+    .from("chart_of_accounts")
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (error) throw new FinancialError("Failed to update account", error);
+  return getAccountById(id);
+}
+
+export async function deleteAccount(id: string) {
+  if (!id) {
+    throw new FinancialError("Account ID is required for deletion.");
+  }
+  const { error } = await getClient()
+    .from("chart_of_accounts")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw new FinancialError("Failed to delete account", error);
   return true;
 }
 
@@ -82,7 +509,7 @@ export async function getTransactions(
     search?: string;
   } = {},
 ) {
-  let query = supabase
+  let query = getClient()
     .from("transactions")
     .select(
       `
@@ -128,7 +555,7 @@ export async function getTransactions(
 }
 
 export async function getTransaction(id: string) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from("transactions")
     .select(
       `
@@ -144,163 +571,9 @@ export async function getTransaction(id: string) {
   return data;
 }
 
-export async function createTransaction(transaction: Partial<Transaction>) {
-  if (!transaction.account_id || !transaction.amount || !transaction.type) {
-    throw new Error('Missing required transaction fields');
-  }
-
-  if (transaction.amount <= 0) {
-    throw new Error('Transaction amount must be positive');
-  }
-
-  if (!['income', 'expense'].includes(transaction.type)) {
-    throw new Error('Invalid transaction type');
-  }
-
-  // Start a transaction to update account balance
-  const { data: accountData, error: accountError } = await supabase
-    .from("accounts")
-    .select("balance")
-    .eq("id", transaction.account_id)
-    .single();
-
-  if (accountError) throw accountError;
-
-  if (!accountData) {
-    throw new Error('Account not found');
-  }
-
-  // Calculate new balance
-  let newBalance = accountData.balance;
-  if (transaction.type === "income") {
-    newBalance += transaction.amount;
-  } else {
-    newBalance -= transaction.amount;
-    if (newBalance < 0) {
-      console.warn('Account balance will be negative', {
-        accountId: transaction.account_id,
-        currentBalance: accountData.balance,
-        transactionAmount: transaction.amount
-      });
-    }
-  }
-
-  // Update account balance
-  const { error: updateError } = await supabase
-    .from("accounts")
-    .update({ balance: newBalance, updated_at: new Date().toISOString() })
-    .eq("id", transaction.account_id);
-
-  if (updateError) throw updateError;
-
-  // Create the transaction
-  const { data, error } = await supabase
-    .from("transactions")
-    .insert([
-      {
-        ...transaction,
-        updated_at: new Date().toISOString(),
-      },
-    ])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function updateTransaction(
-  id: string,
-  updates: Partial<Transaction>,
-  originalTransaction?: Transaction,
-) {
-  // If we're updating amount, type, or account, we need to adjust account balances
-  if (
-    originalTransaction &&
-    (updates.amount !== undefined ||
-      updates.type !== undefined ||
-      updates.account_id !== undefined)
-  ) {
-    // Revert original transaction effect on original account
-    const { data: originalAccountData, error: originalAccountError } =
-      await supabase
-        .from("accounts")
-        .select("balance")
-        .eq("id", originalTransaction.account_id)
-        .single();
-
-    if (originalAccountError) throw originalAccountError;
-
-    let originalAccountNewBalance = originalAccountData.balance;
-    if (originalTransaction.type === "income") {
-      originalAccountNewBalance -= originalTransaction.amount;
-    } else if (originalTransaction.type === "expense") {
-      originalAccountNewBalance += originalTransaction.amount;
-    }
-
-    // Update original account balance
-    const { error: updateOriginalError } = await supabase
-      .from("accounts")
-      .update({
-        balance: originalAccountNewBalance,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", originalTransaction.account_id);
-
-    if (updateOriginalError) throw updateOriginalError;
-
-    // If account changed, apply new transaction to new account
-    const targetAccountId =
-      updates.account_id || originalTransaction.account_id;
-    const transactionType = updates.type || originalTransaction.type;
-    const transactionAmount = updates.amount || originalTransaction.amount;
-
-    const { data: targetAccountData, error: targetAccountError } =
-      await supabase
-        .from("accounts")
-        .select("balance")
-        .eq("id", targetAccountId)
-        .single();
-
-    if (targetAccountError) throw targetAccountError;
-
-    let targetAccountNewBalance = targetAccountData.balance;
-    if (transactionType === "income") {
-      targetAccountNewBalance += transactionAmount;
-    } else if (transactionType === "expense") {
-      targetAccountNewBalance -= transactionAmount;
-    }
-
-    // Update target account balance
-    const { error: updateTargetError } = await supabase
-      .from("accounts")
-      .update({
-        balance: targetAccountNewBalance,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", targetAccountId);
-
-    if (updateTargetError) throw updateTargetError;
-  }
-
-  // Update the transaction
-  const { data, error } = await supabase
-    .from("transactions")
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
 export async function deleteTransaction(id: string) {
   // Get the transaction to adjust account balance
-  const { data: transaction, error: getError } = await supabase
+  const { data: transaction, error: getError } = await getClient()
     .from("transactions")
     .select("*")
     .eq("id", id)
@@ -309,7 +582,7 @@ export async function deleteTransaction(id: string) {
   if (getError) throw getError;
 
   // Get current account balance
-  const { data: accountData, error: accountError } = await supabase
+  const { data: accountData, error: accountError } = await getClient()
     .from("accounts")
     .select("balance")
     .eq("id", transaction.account_id)
@@ -326,7 +599,7 @@ export async function deleteTransaction(id: string) {
   }
 
   // Update account balance
-  const { error: updateError } = await supabase
+  const { error: updateError } = await getClient()
     .from("accounts")
     .update({ balance: newBalance, updated_at: new Date().toISOString() })
     .eq("id", transaction.account_id);
@@ -334,7 +607,7 @@ export async function deleteTransaction(id: string) {
   if (updateError) throw updateError;
 
   // Delete the transaction
-  const { error } = await supabase.from("transactions").delete().eq("id", id);
+  const { error } = await getClient().from("transactions").delete().eq("id", id);
 
   if (error) throw error;
   return true;
@@ -342,7 +615,7 @@ export async function deleteTransaction(id: string) {
 
 // Categories Management
 export async function getCategories() {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from("categories")
     .select("*")
     .order("name");
@@ -352,7 +625,7 @@ export async function getCategories() {
 }
 
 export async function getCategory(id: string) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from("categories")
     .select("*")
     .eq("id", id)
@@ -362,12 +635,14 @@ export async function getCategory(id: string) {
   return data;
 }
 
-export async function createCategory(category: Partial<Category>) {
-  const { data, error } = await supabase
+export async function createCategory(category: Partial<Category> & { user_id: string; name: string; type: "income" | "expense" }) {
+  const { data, error } = await getClient()
     .from("categories")
     .insert([
       {
         ...category,
+        is_active: category.is_active ?? true,
+        is_default: category.is_default ?? false,
         updated_at: new Date().toISOString(),
       },
     ])
@@ -379,7 +654,7 @@ export async function createCategory(category: Partial<Category>) {
 }
 
 export async function updateCategory(id: string, updates: Partial<Category>) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from("categories")
     .update({
       ...updates,
@@ -394,272 +669,88 @@ export async function updateCategory(id: string, updates: Partial<Category>) {
 }
 
 export async function deleteCategory(id: string) {
-  const { error } = await supabase.from("categories").delete().eq("id", id);
+  const { error } = await getClient().from("categories").delete().eq("id", id);
 
   if (error) throw error;
   return true;
 }
 
 // Reports Generation
-export async function generateIncomeStatement(
-  filter: ReportFilter,
-): Promise<ReportData> {
-  // Set default date range if not provided
-  const endDate = filter.endDate || new Date().toISOString().split("T")[0];
-  const startDate =
-    filter.startDate ||
-    new Date(new Date().setMonth(new Date().getMonth() - 1))
-      .toISOString()
-      .split("T")[0];
+function calculateCategoryTotals(transactions: Transaction[]): Record<string, CategorySummary> {
+  const totals: Record<string, CategorySummary> = {};
 
-  // Get all transactions within date range
-  let query = supabase
-    .from("transactions")
-    .select(
-      `
-      *,
-      category:categories(id, name, type)
-    `,
-    )
-    .gte("date", startDate)
-    .lte("date", endDate);
+  for (const transaction of transactions) {
+    const categoryId = transaction.category_id || 'uncategorized';
+    const categoryName = transaction.category?.name || 'Uncategorized';
 
-  // Apply additional filters
-  if (filter.accounts && filter.accounts.length > 0) {
-    query = query.in("account_id", filter.accounts);
-  }
-
-  if (filter.categories && filter.categories.length > 0) {
-    query = query.in("category_id", filter.categories);
-  }
-
-  if (filter.type && filter.type !== "all") {
-    query = query.eq("type", filter.type);
-  }
-
-  const { data: transactions, error } = await query;
-
-  if (error) throw error;
-
-  // Calculate income and expenses
-  const income = transactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const expenses = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const netProfit = income - expenses;
-  const profitMargin = income > 0 ? (netProfit / income) * 100 : 0;
-
-  // Group transactions by category
-  const categorySummary = transactions.reduce(
-    (acc, transaction) => {
-      const categoryId = transaction.category_id;
-      const categoryName = transaction.category?.name || "Uncategorized";
-      const categoryType =
-        transaction.category?.type ||
-        (transaction.type === "income" ? "income" : "expense");
-
-      if (!acc[categoryType]) {
-        acc[categoryType] = {};
-      }
-
-      if (!acc[categoryType][categoryId]) {
-        acc[categoryType][categoryId] = {
-          id: categoryId,
-          name: categoryName,
-          amount: 0,
-          transactions: [],
-        };
-      }
-
-      acc[categoryType][categoryId].amount += transaction.amount;
-      acc[categoryType][categoryId].transactions.push(transaction);
-
-      return acc;
-    },
-    { income: {}, expense: {} },
-  );
-
-  return {
-    title: "Income Statement",
-    dateRange: {
-      start: startDate,
-      end: endDate,
-    },
-    summary: {
-      totalIncome: income,
-      totalExpenses: expenses,
-      netProfit,
-      profitMargin,
-    },
-    data: {
-      categorySummary,
-      transactions,
-    },
-  };
-}
-
-export async function generateBalanceSheet(): Promise<ReportData> {
-  // Get all accounts
-  const { data: accounts, error: accountsError } = await supabase
-    .from("accounts")
-    .select("*");
-
-  if (accountsError) throw accountsError;
-
-  // Calculate assets, liabilities, and equity
-  const assets = accounts
-    .filter((a) =>
-      ["checking", "savings", "investment", "cash"].includes(a.type),
-    )
-    .reduce((sum, a) => sum + a.balance, 0);
-
-  const liabilities = accounts
-    .filter((a) => ["credit"].includes(a.type))
-    .reduce((sum, a) => sum + a.balance, 0);
-
-  const equity = assets - liabilities;
-
-  // Group accounts by type
-  const accountsByType = accounts.reduce((acc, account) => {
-    if (!acc[account.type]) {
-      acc[account.type] = [];
-    }
-
-    acc[account.type].push(account);
-    return acc;
-  }, {});
-
-  return {
-    title: "Balance Sheet",
-    dateRange: {
-      start: "",
-      end: new Date().toISOString().split("T")[0],
-    },
-    summary: {
-      totalIncome: assets,
-      totalExpenses: liabilities,
-      netProfit: equity,
-      profitMargin: 0,
-    },
-    data: {
-      assets,
-      liabilities,
-      equity,
-      accountsByType,
-      accounts,
-    },
-  };
-}
-
-export async function generateCashFlowStatement(
-  filter: ReportFilter,
-): Promise<ReportData> {
-  // Set default date range if not provided
-  const endDate = filter.endDate || new Date().toISOString().split("T")[0];
-  const startDate =
-    filter.startDate ||
-    new Date(new Date().setMonth(new Date().getMonth() - 1))
-      .toISOString()
-      .split("T")[0];
-
-  // Get all transactions within date range
-  let query = supabase
-    .from("transactions")
-    .select(
-      `
-      *,
-      category:categories(id, name, type)
-    `,
-    )
-    .gte("date", startDate)
-    .lte("date", endDate);
-
-  // Apply additional filters
-  if (filter.accounts && filter.accounts.length > 0) {
-    query = query.in("account_id", filter.accounts);
-  }
-
-  const { data: transactions, error } = await query;
-
-  if (error) throw error;
-
-  // Group transactions by date
-  interface DailyTransactionSummary {
-    date: string;
-    income: number;
-    expense: number;
-    net: number;
-    transactions: Transaction[];
-    balance?: number;
-  }
-
-  const transactionsByDate = transactions.reduce<Record<string, DailyTransactionSummary>>((acc, transaction) => {
-    const date = transaction.date;
-
-    if (!acc[date]) {
-      acc[date] = {
-        date,
-        income: 0,
-        expense: 0,
-        net: 0,
+    if (!totals[categoryId]) {
+      totals[categoryId] = {
+        id: categoryId,
+        name: categoryName,
+        amount: 0,
         transactions: [],
       };
     }
 
-    if (transaction.type === "income") {
-      acc[date].income += transaction.amount;
-    } else if (transaction.type === "expense") {
-      acc[date].expense += transaction.amount;
-    }
+    totals[categoryId].amount += transaction.amount;
+    totals[categoryId].transactions.push(transaction);
+  }
 
-    acc[date].net = acc[date].income - acc[date].expense;
-    acc[date].transactions.push(transaction);
+  return totals;
+}
 
-    return acc;
-  }, {});
+export async function generateReport(
+  startDate: string,
+  endDate: string,
+  filter: ReportFilter = {},
+): Promise<ReportData> {
+  const { data: transactions, error } = await getClient()
+    .from("transactions")
+    .select(`
+      *,
+      category:categories (
+        id,
+        name,
+        type,
+        color
+      )
+    `)
+    .gte("date", startDate)
+    .lte("date", endDate);
 
-  // Convert to array and sort by date
-  const cashFlowByDate = Object.values(transactionsByDate).sort((a: DailyTransactionSummary, b: DailyTransactionSummary) => {
-    return new Date(a.date).getTime() - new Date(b.date).getTime();
-  });
+  if (error) throw new FinancialError("Failed to fetch transactions", error);
+  if (!transactions) throw new FinancialError("No transactions found");
 
-  // Calculate running balance
-  let runningBalance = 0;
-  cashFlowByDate.forEach((day: DailyTransactionSummary) => {
-    runningBalance += day.net;
-    day.balance = runningBalance;
-  });
+  // Cast the transactions to ensure correct typing
+  const typedTransactions = transactions.map(t => ({
+    ...t,
+    category: t.category || null,
+    is_recurring: t.is_recurring || false,
+  })) as Transaction[];
 
-  // Calculate totals
-  const totalIncome = transactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
+  const incomeTransactions = typedTransactions.filter(t => t.type === "income");
+  const expenseTransactions = typedTransactions.filter(t => t.type === "expense");
 
-  const totalExpenses = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const netCashFlow = totalIncome - totalExpenses;
+  const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
+  const totalExpenses = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
+  const netProfit = totalIncome - totalExpenses;
+  const profitMargin = totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0;
 
   return {
-    title: "Cash Flow Statement",
-    dateRange: {
-      start: startDate,
-      end: endDate,
-    },
+    title: `Financial Report (${startDate} to ${endDate})`,
+    dateRange: { start: startDate, end: endDate },
     summary: {
       totalIncome,
       totalExpenses,
-      netProfit: netCashFlow,
-      profitMargin: 0,
+      netProfit,
+      profitMargin,
     },
     data: {
-      cashFlowByDate,
-      transactions,
+      categorySummary: {
+        income: calculateCategoryTotals(incomeTransactions),
+        expense: calculateCategoryTotals(expenseTransactions),
+      },
+      transactions: typedTransactions,
     },
   };
 }
@@ -669,15 +760,18 @@ export async function startReconciliation(
   accountId: string,
   statementDate: string,
   statementBalance: number,
+  userId: string,
 ) {
   // Create reconciliation record
-  const { data: reconciliation, error } = await supabase
+  const { data: reconciliation, error } = await getClient()
     .from("reconciliations")
     .insert([
       {
+        user_id: userId,
         account_id: accountId,
         statement_date: statementDate,
         statement_balance: statementBalance,
+        is_completed: false,
         updated_at: new Date().toISOString(),
       },
     ])
@@ -687,7 +781,7 @@ export async function startReconciliation(
   if (error) throw error;
 
   // Get all unreconciled transactions for this account
-  const { data: transactions, error: transactionsError } = await supabase
+  const { data: transactions, error: transactionsError } = await getClient()
     .from("transactions")
     .select("*")
     .eq("account_id", accountId)
@@ -704,7 +798,7 @@ export async function startReconciliation(
   }));
 
   if (reconciliationItems.length > 0) {
-    const { error: itemsError } = await supabase
+    const { error: itemsError } = await getClient()
       .from("reconciliation_items")
       .insert(reconciliationItems);
 
@@ -715,7 +809,7 @@ export async function startReconciliation(
 }
 
 export async function getReconciliation(id: string) {
-  const { data: reconciliation, error } = await supabase
+  const { data: reconciliation, error } = await getClient()
     .from("reconciliations")
     .select("*")
     .eq("id", id)
@@ -724,7 +818,7 @@ export async function getReconciliation(id: string) {
   if (error) throw error;
 
   // Get reconciliation items with transactions
-  const { data: items, error: itemsError } = await supabase
+  const { data: items, error: itemsError } = await getClient()
     .from("reconciliation_items")
     .select(
       `
@@ -748,7 +842,7 @@ export async function updateReconciliationItem(
 ) {
   const now = new Date().toISOString();
 
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from("reconciliation_items")
     .update({
       is_reconciled: isReconciled,
@@ -763,7 +857,7 @@ export async function updateReconciliationItem(
 
   // If reconciled, update transaction status
   if (isReconciled) {
-    const { error: transactionError } = await supabase
+    const { error: transactionError } = await getClient()
       .from("transactions")
       .update({
         status: "reconciled",
@@ -784,18 +878,16 @@ export async function completeReconciliation(id: string) {
   const reconciliation = await getReconciliation(id);
 
   // Check if all items are reconciled
-  const allReconciled = reconciliation.items.every(
-    (item: ReconciliationItem) => item.is_reconciled,
+  const allReconciled = (reconciliation.items as ReconciliationItem[]).every(
+    (item) => item.is_reconciled
   );
 
   if (!allReconciled) {
-    throw new Error(
-      "Cannot complete reconciliation: not all items are reconciled",
-    );
+    throw new FinancialError("Cannot complete reconciliation: not all items are reconciled");
   }
 
   // Update reconciliation status
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from("reconciliations")
     .update({
       is_completed: true,
@@ -806,10 +898,10 @@ export async function completeReconciliation(id: string) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw new FinancialError("Failed to update reconciliation status", error);
 
   // Update account balance to match statement balance
-  const { error: accountError } = await supabase
+  const { error: accountError } = await getClient()
     .from("accounts")
     .update({
       balance: reconciliation.statement_balance,
@@ -817,13 +909,13 @@ export async function completeReconciliation(id: string) {
     })
     .eq("id", reconciliation.account_id);
 
-  if (accountError) throw accountError;
+  if (accountError) throw new FinancialError("Failed to update account balance", accountError);
 
   return data;
 }
 
 export async function getAccountReconciliations(accountId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from("reconciliations")
     .select("*")
     .eq("account_id", accountId)

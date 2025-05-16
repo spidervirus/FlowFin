@@ -9,7 +9,11 @@ interface TimeLeft {
   seconds: number;
 }
 
-export default function CountdownTimer() {
+interface CountdownTimerProps {
+  targetDate: string;
+}
+
+export default function CountdownTimer({ targetDate }: CountdownTimerProps) {
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({
     days: 0,
     hours: 0,
@@ -18,20 +22,13 @@ export default function CountdownTimer() {
   });
 
   useEffect(() => {
-    // Get the stored launch date or set a new one
-    const getLaunchDate = () => {
-      const storedDate = localStorage.getItem('launchDate');
-      if (storedDate) {
-        return new Date(storedDate);
-      }
-      // Set launch date to 30 days from now if not stored
-      const newDate = new Date();
-      newDate.setDate(newDate.getDate() + 30);
-      localStorage.setItem('launchDate', newDate.toISOString());
-      return newDate;
-    };
-
-    const launchDate = getLaunchDate();
+    // Parse the targetDate string to create a more robust local Date object
+    // Assuming targetDate is in YYYY-MM-DDTHH:mm:ss format
+    const year = parseInt(targetDate.substring(0, 4), 10);
+    const month = parseInt(targetDate.substring(5, 7), 10) - 1; // Month is 0-indexed
+    const day = parseInt(targetDate.substring(8, 10), 10);
+    // You can also parse hours, minutes, seconds if needed, but for start of day:
+    const launchDate = new Date(year, month, day, 0, 0, 0); // Explicitly set to start of local day
 
     const calculateTimeLeft = () => {
       const difference = launchDate.getTime() - new Date().getTime();
@@ -44,12 +41,10 @@ export default function CountdownTimer() {
           seconds: Math.floor((difference / 1000) % 60),
         });
       } else {
-        // If countdown is finished, reset it to 30 days from now
-        const newDate = new Date();
-        newDate.setDate(newDate.getDate() + 30);
-        localStorage.setItem('launchDate', newDate.toISOString());
+        // If countdown is finished, show 0s.
+        // The behavior of resetting to 30 days is removed as the targetDate is fixed.
         setTimeLeft({
-          days: 30,
+          days: 0,
           hours: 0,
           minutes: 0,
           seconds: 0,
@@ -58,10 +53,10 @@ export default function CountdownTimer() {
     };
 
     const timer = setInterval(calculateTimeLeft, 1000);
-    calculateTimeLeft();
+    calculateTimeLeft(); // initial call
 
     return () => clearInterval(timer);
-  }, []);
+  }, [targetDate]); // Add targetDate to dependency array
 
   return (
     <div className="flex justify-center gap-4 sm:gap-8">

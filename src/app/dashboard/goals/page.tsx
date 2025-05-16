@@ -1,92 +1,157 @@
-import DashboardNavbar from "@/components/dashboard-navbar";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import GoalsList from "@/components/goal-components/goals-list";
-import GoalsOverview from "@/components/goal-components/goals-overview";
+"use client";
+
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { CurrencyCode } from "@/lib/utils";
-import { createSupabaseClient } from '@/lib/supabase-client';
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
+import DashboardWrapper from "../dashboard-wrapper";
+import GoalsList from "@/components/goal-components/goals-list";
+import GoalsOverview from "@/components/goal-components/goals-overview";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { FinancialGoal } from "@/types/financial";
+import type { Database } from "@/app/types/supabase";
 
-export default async function GoalsPage() {
-  const supabase = await createClient();
+interface CompanySettings {
+  default_currency: CurrencyCode;
+}
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+type DbFinancialGoal = Database["public"]["Tables"]["financial_goals"]["Row"] & {
+  category: Database["public"]["Tables"]["categories"]["Row"] | null;
+  contributions: Database["public"]["Tables"]["goal_contributions"]["Row"][];
+};
 
-  if (!user) {
-    return redirect("/sign-in");
-  }
+export default function GoalsPage() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [goals, setGoals] = useState<FinancialGoal[]>([]);
+  const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [currency, setCurrency] = useState<CurrencyCode>("USD");
 
-  // Get company settings
-  const supabaseClient = createSupabaseClient();
-  const { data: settings } = await supabaseClient
-    .from('company_settings')
-    .select('*')
-    .single();
+  useEffect(() => {
+    async function fetchData() {
+      setIsLoading(true);
+      try {
+        const supabaseClient = createClient();
 
-  // Use default currency if settings don't exist
-  const currency = settings?.default_currency as CurrencyCode || 'USD';
+        // Check if user is authenticated
+        const {
+          data: { user },
+        } = await supabaseClient.auth.getUser();
+        if (!user) {
+          router.push("/sign-in");
+          return;
+        }
 
-  // Initialize empty array for goals
-  let goals: any[] = [];
+        // Fetch company settings
+        const { data: settingsData, error: settingsError } =
+          await supabaseClient
+            .from("company_settings")
+            .select("*")
+            .eq("user_id", user.id)
+            .single();
 
-  // Only fetch goals if company settings exist
-  if (settings) {
-    // Get active goals
-    const { data: goalsData, error } = await supabase
-      .from("financial_goals")
-      .select(`
-        *,
-        category:categories(*),
-        contributions:goal_contributions(*)
-      `)
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .order("target_date", { ascending: true });
+        if (settingsError) {
+          console.error("Error fetching company settings:", settingsError);
+          toast.error("Failed to load company settings");
+          return;
+        }
 
-    if (error) {
-      console.error("Error fetching goals:", error);
-    } else if (goalsData) {
-      goals = goalsData;
+        setSettings(settingsData);
+        if (settingsData?.default_currency) {
+          setCurrency(settingsData.default_currency as CurrencyCode);
+        }
+
+        // Fetch active goals with categories and contributions
+        const { data: goalsData, error: goalsError } = await supabaseClient
+          .from("financial_goals")
+          .select(`
+            *,
+            category:categories(*)
+          `)
+          .eq("user_id", user.id)
+          .eq("is_active", true)
+          .order("target_date", { ascending: true });
+
+        if (goalsError) {
+          console.error("Error fetching goals:", goalsError);
+          toast.error("Failed to load goals");
+          return;
+        }
+
+        // Transform the data to match FinancialGoal type
+        const transformedGoals = (goalsData || []).map((goal: any) => ({
+          ...goal,
+          category: goal.category?.[0] || undefined
+        })) as FinancialGoal[];
+
+        setGoals(transformedGoals);
+      } catch (error) {
+        console.error("Error in fetchData:", error);
+        toast.error("An error occurred while loading data");
+      } finally {
+        setIsLoading(false);
+      }
     }
+
+    fetchData();
+
+    // Set up real-time subscription for goal updates
+    const supabaseClient = createClient();
+    const goalsSubscription = supabaseClient
+      .channel("goals_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "financial_goals",
+          filter: `user_id=eq.${supabaseClient.auth.getUser().then(({ data: { user } }) => user?.id)}`,
+        },
+        () => {
+          fetchData();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      goalsSubscription.unsubscribe();
+    };
+  }, [router]);
+
+  if (isLoading) {
+    return (
+      <DashboardWrapper>
+        <div className="flex justify-center items-center h-[60vh]">
+          <p className="text-lg">Loading goals...</p>
+        </div>
+      </DashboardWrapper>
+    );
   }
 
   return (
-    <>
-      <DashboardNavbar />
-      <main className="w-full bg-gray-50 min-h-screen">
-        <div className="container mx-auto px-4 py-8 flex flex-col gap-8">
-          {/* Header Section */}
-          <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold">Financial Goals</h1>
-              <p className="text-muted-foreground">
-                Set and track your savings goals
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <Link href="/dashboard/goals/new">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" /> Create Goal
-                </Button>
-              </Link>
-            </div>
-          </header>
-
-          {/* Goals Overview */}
-          <section className="grid grid-cols-1 gap-6">
-            <GoalsOverview goals={goals || []} currency={currency} />
-          </section>
-
-          {/* Goals List */}
-          <section className="grid grid-cols-1 gap-6">
-            <GoalsList goals={goals || []} currency={currency} />
-          </section>
+    <DashboardWrapper>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 mb-8">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold">Financial Goals</h1>
+            <Link href="/dashboard/goals/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Goal
+              </Button>
+            </Link>
+          </div>
+          <p className="text-muted-foreground">
+            Set and track your financial goals
+          </p>
         </div>
-      </main>
-    </>
+
+        <GoalsOverview goals={goals} currency={currency} />
+        <GoalsList goals={goals} currency={currency} />
+      </div>
+    </DashboardWrapper>
   );
-} 
+}

@@ -2,8 +2,8 @@
 
 import Footer from "@/components/footer";
 import Navbar from "@/components/navbar";
-import CountdownTimer from "@/components/countdown-timer";
-import WaitlistForm from "@/components/waitlist-form";
+import CountdownTimer from "../components/countdown-timer";
+import WaitlistForm from "../components/waitlist-form";
 import {
   ArrowUpRight,
   BarChart3,
@@ -20,7 +20,7 @@ import Image from "next/image";
 export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
-      <Navbar />
+      {/* <Navbar /> */}
       
       {/* Coming Soon Hero Section */}
       <section id="waitlist" className="py-20 bg-gradient-to-br from-blue-50 via-white to-blue-50 relative overflow-hidden">
@@ -52,7 +52,7 @@ export default function Home() {
           
           {/* Countdown Timer */}
           <div className="mb-12">
-            <CountdownTimer />
+            <CountdownTimer targetDate="2025-06-13T00:00:00" />
           </div>
           
           {/* Waitlist Form */}
@@ -129,7 +129,7 @@ export default function Home() {
         </div>
       </section>
 
-      <Footer />
+      {/* <Footer /> */}
     </div>
   );
 }

@@ -32,7 +32,9 @@ interface SmartCategorizationProps {
   currency: CurrencyCode;
 }
 
-export default function SmartCategorization({ currency }: SmartCategorizationProps) {
+export default function SmartCategorization({
+  currency,
+}: SmartCategorizationProps) {
   const [description, setDescription] = useState("");
   const [suggestions, setSuggestions] = useState<null | {
     category: string;
@@ -171,7 +173,8 @@ export default function SmartCategorization({ currency }: SmartCategorizationPro
     return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
       style: "currency",
       currency,
-      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 2,
+      minimumFractionDigits:
+        CURRENCY_CONFIG[currency].minimumFractionDigits ?? 2,
       maximumFractionDigits: 2,
     }).format(amount);
   };

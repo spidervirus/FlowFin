@@ -10,25 +10,25 @@ export default function SuccessMessage() {
   useEffect(() => {
     // Check for success message in sessionStorage
     const sessionMsg = sessionStorage.getItem("success");
-    
+
     // Also check localStorage for success message
     const localMsg = localStorage.getItem("setupSuccess");
-    
-    let successMsg = sessionMsg || localMsg;
-    
+
+    const successMsg = sessionMsg || localMsg;
+
     if (successMsg) {
       setMessage(successMsg);
       setVisible(true);
-      
+
       // Clear the messages
       if (sessionMsg) sessionStorage.removeItem("success");
       if (localMsg) localStorage.removeItem("setupSuccess");
-      
+
       // Auto-hide after 5 seconds
       const timer = setTimeout(() => {
         setVisible(false);
       }, 5000);
-      
+
       return () => clearTimeout(timer);
     }
   }, []);
@@ -43,7 +43,7 @@ export default function SuccessMessage() {
       <div className="flex-1">
         <p className="text-green-800 font-medium">{message}</p>
       </div>
-      <button 
+      <button
         onClick={() => setVisible(false)}
         className="text-green-500 hover:text-green-700"
       >
@@ -51,4 +51,4 @@ export default function SuccessMessage() {
       </button>
     </div>
   );
-} 
+}

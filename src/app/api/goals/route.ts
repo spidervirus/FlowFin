@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../../supabase/server";
+import { RateLimiter } from '@/lib/utils/rate-limit';
+import { validateCsrfToken } from '@/lib/utils/csrf';
 
 // GET /api/goals - Get all financial goals for the current user
 export async function GET(request: NextRequest) {
@@ -20,16 +22,19 @@ export async function GET(request: NextRequest) {
     const active = url.searchParams.get("active");
     const completed = url.searchParams.get("completed");
     const categoryId = url.searchParams.get("category_id");
-    const withContributions = url.searchParams.get("with_contributions") === "true";
+    const withContributions =
+      url.searchParams.get("with_contributions") === "true";
 
     // Build query
     let query = supabase
       .from("financial_goals")
-      .select(`
+      .select(
+        `
         *,
         category:categories(*)
         ${withContributions ? `, contributions:goal_contributions(*)` : ""}
-      `)
+      `,
+      )
       .eq("user_id", user.id)
       .order("target_date", { ascending: true });
 
@@ -62,7 +67,7 @@ export async function GET(request: NextRequest) {
     console.error("Error in financial goals GET:", error);
     return NextResponse.json(
       { error: "Failed to fetch financial goals" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -96,8 +101,11 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     if (!name || !target_amount || !start_date || !target_date) {
       return NextResponse.json(
-        { error: "Name, target amount, start date, and target date are required" },
-        { status: 400 }
+        {
+          error:
+            "Name, target amount, start date, and target date are required",
+        },
+        { status: 400 },
       );
     }
 
@@ -105,7 +113,7 @@ export async function POST(request: NextRequest) {
     if (isNaN(target_amount) || target_amount <= 0) {
       return NextResponse.json(
         { error: "Target amount must be a positive number" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -117,14 +125,14 @@ export async function POST(request: NextRequest) {
     if (isNaN(startDate.getTime()) || isNaN(targetDate.getTime())) {
       return NextResponse.json(
         { error: "Invalid date format" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (targetDate < startDate) {
       return NextResponse.json(
         { error: "Target date must be after start date" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -155,13 +163,25 @@ export async function POST(request: NextRequest) {
     console.error("Error in financial goal POST:", error);
     return NextResponse.json(
       { error: "Failed to create financial goal" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 // PUT /api/goals - Update a financial goal
 export async function PUT(request: NextRequest) {
+  // --- Rate limiting ---
+  const rateLimiter = new RateLimiter();
+  const rateLimitResult = await rateLimiter.check(request, 'api');
+  if (!rateLimitResult.success) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+  // --- CSRF validation ---
+  const csrfResult = await validateCsrfToken(request);
+  if (!csrfResult.success) {
+    return NextResponse.json({ error: 'Invalid CSRF token.' }, { status: 403 });
+  }
+
   const supabase = await createClient();
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
@@ -196,8 +216,11 @@ export async function PUT(request: NextRequest) {
     // Validate required fields
     if (!name || !target_amount || !start_date || !target_date) {
       return NextResponse.json(
-        { error: "Name, target amount, start date, and target date are required" },
-        { status: 400 }
+        {
+          error:
+            "Name, target amount, start date, and target date are required",
+        },
+        { status: 400 },
       );
     }
 
@@ -205,7 +228,7 @@ export async function PUT(request: NextRequest) {
     if (isNaN(target_amount) || target_amount <= 0) {
       return NextResponse.json(
         { error: "Target amount must be a positive number" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -216,14 +239,14 @@ export async function PUT(request: NextRequest) {
     if (isNaN(startDate.getTime()) || isNaN(targetDate.getTime())) {
       return NextResponse.json(
         { error: "Invalid date format" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (targetDate < startDate) {
       return NextResponse.json(
         { error: "Target date must be after start date" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -238,7 +261,7 @@ export async function PUT(request: NextRequest) {
     if (fetchError || !existingGoal) {
       return NextResponse.json(
         { error: "Goal not found or access denied" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -270,13 +293,25 @@ export async function PUT(request: NextRequest) {
     console.error("Error in financial goal PUT:", error);
     return NextResponse.json(
       { error: "Failed to update financial goal" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 // DELETE /api/goals - Delete a financial goal
 export async function DELETE(request: NextRequest) {
+  // --- Rate limiting ---
+  const rateLimiter = new RateLimiter();
+  const rateLimitResult = await rateLimiter.check(request, 'api');
+  if (!rateLimitResult.success) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+  // --- CSRF validation ---
+  const csrfResult = await validateCsrfToken(request);
+  if (!csrfResult.success) {
+    return NextResponse.json({ error: 'Invalid CSRF token.' }, { status: 403 });
+  }
+
   const supabase = await createClient();
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
@@ -306,12 +341,15 @@ export async function DELETE(request: NextRequest) {
     if (fetchError || !existingGoal) {
       return NextResponse.json(
         { error: "Goal not found or access denied" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     // Delete goal (this will cascade delete contributions due to foreign key constraint)
-    const { error } = await supabase.from("financial_goals").delete().eq("id", id);
+    const { error } = await supabase
+      .from("financial_goals")
+      .delete()
+      .eq("id", id);
 
     if (error) {
       console.error("Error deleting financial goal:", error);
@@ -323,7 +361,7 @@ export async function DELETE(request: NextRequest) {
     console.error("Error in financial goal DELETE:", error);
     return NextResponse.json(
       { error: "Failed to delete financial goal" },
-      { status: 500 }
+      { status: 500 },
     );
   }
-} 
+}

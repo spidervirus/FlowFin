@@ -19,7 +19,7 @@ export default function Hero() {
           <div className="flex flex-col lg:flex-row items-center gap-12">
             <div className="lg:w-1/2 text-center lg:text-left">
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 tracking-tight leading-tight">
-                AI-Powered 
+                AI-Powered
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-800 block">
                   Accounting Software
                 </span>

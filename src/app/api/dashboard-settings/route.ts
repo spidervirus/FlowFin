@@ -71,10 +71,13 @@ export async function GET(request: NextRequest) {
         .single();
 
       if (insertError) {
-        console.error("Error creating default dashboard settings:", insertError);
+        console.error(
+          "Error creating default dashboard settings:",
+          insertError,
+        );
         return NextResponse.json(
           { error: insertError.message },
-          { status: 500 }
+          { status: 500 },
         );
       }
 
@@ -86,7 +89,7 @@ export async function GET(request: NextRequest) {
     console.error("Error in dashboard settings GET:", error);
     return NextResponse.json(
       { error: "Failed to fetch dashboard settings" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -117,10 +120,7 @@ export async function PUT(request: NextRequest) {
 
     if (fetchError && fetchError.code !== "PGRST116") {
       console.error("Error fetching dashboard settings:", fetchError);
-      return NextResponse.json(
-        { error: fetchError.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: fetchError.message }, { status: 500 });
     }
 
     // Update or insert settings
@@ -168,7 +168,7 @@ export async function PUT(request: NextRequest) {
     console.error("Error in dashboard settings PUT:", error);
     return NextResponse.json(
       { error: "Failed to update dashboard settings" },
-      { status: 500 }
+      { status: 500 },
     );
   }
-} 
+}

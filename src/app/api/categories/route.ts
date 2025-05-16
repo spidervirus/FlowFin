@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../../supabase/server";
+import { RateLimiter } from '@/lib/utils/rate-limit';
+import { validateCsrfToken } from '@/lib/utils/csrf';
 
 // GET /api/categories - Get all categories for the current user
 export async function GET(request: NextRequest) {
@@ -51,7 +53,7 @@ export async function GET(request: NextRequest) {
     console.error("Error in categories GET:", error);
     return NextResponse.json(
       { error: "Failed to fetch categories" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
     if (!name || !type) {
       return NextResponse.json(
         { error: "Name and type are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -85,7 +87,7 @@ export async function POST(request: NextRequest) {
     if (type !== "income" && type !== "expense") {
       return NextResponse.json(
         { error: "Type must be 'income' or 'expense'" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -112,19 +114,34 @@ export async function POST(request: NextRequest) {
     console.error("Error in category POST:", error);
     return NextResponse.json(
       { error: "Failed to create category" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 // PUT /api/categories/:id - Update a category
 export async function PUT(request: NextRequest) {
+  // --- Rate limiting ---
+  const rateLimiter = new RateLimiter();
+  const rateLimitResult = await rateLimiter.check(request, 'api');
+  if (!rateLimitResult.success) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+  // --- CSRF validation ---
+  const csrfResult = await validateCsrfToken(request);
+  if (!csrfResult.success) {
+    return NextResponse.json({ error: 'Invalid CSRF token.' }, { status: 403 });
+  }
+
   const supabase = await createClient();
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
 
   if (!id) {
-    return NextResponse.json({ error: "Category ID is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Category ID is required" },
+      { status: 400 },
+    );
   }
 
   // Check if user is authenticated
@@ -144,7 +161,7 @@ export async function PUT(request: NextRequest) {
     if (!name || !type) {
       return NextResponse.json(
         { error: "Name and type are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -152,7 +169,7 @@ export async function PUT(request: NextRequest) {
     if (type !== "income" && type !== "expense") {
       return NextResponse.json(
         { error: "Type must be 'income' or 'expense'" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -167,7 +184,7 @@ export async function PUT(request: NextRequest) {
     if (fetchError || !existingCategory) {
       return NextResponse.json(
         { error: "Category not found or access denied" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -195,19 +212,34 @@ export async function PUT(request: NextRequest) {
     console.error("Error in category PUT:", error);
     return NextResponse.json(
       { error: "Failed to update category" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 // DELETE /api/categories/:id - Delete a category
 export async function DELETE(request: NextRequest) {
+  // --- Rate limiting ---
+  const rateLimiter = new RateLimiter();
+  const rateLimitResult = await rateLimiter.check(request, 'api');
+  if (!rateLimitResult.success) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+  // --- CSRF validation ---
+  const csrfResult = await validateCsrfToken(request);
+  if (!csrfResult.success) {
+    return NextResponse.json({ error: 'Invalid CSRF token.' }, { status: 403 });
+  }
+
   const supabase = await createClient();
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
 
   if (!id) {
-    return NextResponse.json({ error: "Category ID is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Category ID is required" },
+      { status: 400 },
+    );
   }
 
   // Check if user is authenticated
@@ -231,7 +263,7 @@ export async function DELETE(request: NextRequest) {
     if (fetchError || !existingCategory) {
       return NextResponse.json(
         { error: "Category not found or access denied" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -245,7 +277,7 @@ export async function DELETE(request: NextRequest) {
       console.error("Error checking transactions:", countError);
       return NextResponse.json(
         { error: "Failed to check if category is in use" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -255,7 +287,7 @@ export async function DELETE(request: NextRequest) {
           error: "Cannot delete category that is used in transactions",
           count: transactionCount,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -272,7 +304,7 @@ export async function DELETE(request: NextRequest) {
     console.error("Error in category DELETE:", error);
     return NextResponse.json(
       { error: "Failed to delete category" },
-      { status: 500 }
+      { status: 500 },
     );
   }
-} 
+}

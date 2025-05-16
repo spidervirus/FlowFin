@@ -1,6 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import {
+  AlertCircle,
+  Check,
+  ChevronDown,
+  MoreHorizontal,
+  Plus,
+  Save,
+  Trash2,
+  X,
+  Loader2,
+  UserPlus,
+  Search,
+  Trash,
+} from "lucide-react";
+
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,17 +27,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -28,34 +52,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { createSupabaseClient } from '@/lib/supabase-client';
-import { useRouter } from "next/navigation";
-import {
-  Edit,
-  Loader2,
-  MoreHorizontal,
-  Plus,
-  Save,
-  Search,
-  Trash,
-  UserPlus,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "@/components/ui/use-toast";
+
+import { supabase } from "@/lib/supabase/client";
+import type { Database } from "@/types/supabase";
+
+type UserRole = Database["public"]["Tables"]["user_roles"]["Row"]["role"];
+type UserStatus = Database["public"]["Tables"]["user_roles"]["Row"]["status"];
+type UserRoleData = Database["public"]["Views"]["user_roles_with_auth"]["Row"];
 
 interface User {
   id: string;
@@ -64,50 +75,44 @@ interface User {
     full_name?: string;
     avatar_url?: string;
   };
-  role: string;
-  status: "active" | "invited" | "inactive";
+  role: UserRole;
+  status: UserStatus;
   last_active?: string;
-}
-
-interface UserRoleData {
-  id: string;
-  user_id: string;
-  role: string;
-  status: "active" | "invited" | "inactive";
-  last_active: string | null;
-  created_at: string;
-  updated_at: string;
-  email: string;
-  user_metadata: {
-    full_name?: string;
-    avatar_url?: string;
-  } | null;
 }
 
 interface InviteUserResponse {
   success: boolean;
   error?: string;
+  data?: {
+    user_id: string;
+    email: string;
+    role: UserRole;
+  };
 }
 
-const ROLES = [
-  { value: 'administrator', label: 'Administrator' },
-  { value: 'finance_manager', label: 'Finance Manager' },
-  { value: 'accountant', label: 'Accountant' },
-  { value: 'viewer', label: 'Viewer' }
+interface FormData {
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
+const ROLES: { value: UserRole; label: string }[] = [
+  { value: "administrator", label: "Administrator" },
+  { value: "finance_manager", label: "Finance Manager" },
+  { value: "accountant", label: "Accountant" },
+  { value: "viewer", label: "Viewer" },
 ];
 
 export default function UserList() {
-  const supabase = createSupabaseClient();
   const router = useRouter();
-  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: "",
     email: "",
     role: "viewer",
@@ -120,28 +125,28 @@ export default function UserList() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch all users and their roles using the view
       const { data: usersData, error: usersError } = await supabase
-        .from('user_roles_with_auth')
-        .select('*')
-        .order('created_at', { ascending: false })
+        .from("user_roles_with_auth")
+        .select("*")
+        .order("created_at", { ascending: false })
         .returns<UserRoleData[]>();
 
       if (usersError) throw usersError;
 
-      const formattedUsers: User[] = usersData.map(userData => ({
+      const formattedUsers: User[] = usersData.map((userData) => ({
         id: userData.user_id,
         email: userData.email,
         user_metadata: userData.user_metadata || undefined,
         role: userData.role,
         status: userData.status,
-        last_active: userData.last_active || undefined
+        last_active: userData.last_active || undefined,
       }));
 
       setUsers(formattedUsers);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error("Error fetching users:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -157,7 +162,7 @@ export default function UserList() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleRoleChange = (value: string) => {
+  const handleRoleChange = (value: UserRole) => {
     setFormData((prev) => ({ ...prev, role: value }));
   };
 
@@ -166,15 +171,18 @@ export default function UserList() {
     setInviting(true);
 
     try {
-      const { data, error } = await supabase.rpc('invite_user', {
-        p_email: formData.email,
-        p_role: formData.role
-      }).returns<InviteUserResponse>();
+      const { data, error: rpcError } = await supabase
+        .rpc("invite_user", {
+          p_email: formData.email,
+          p_role: formData.role,
+        });
 
-      if (error) throw error;
-      if (!data) throw new Error('No response from server');
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to invite user');
+      if (rpcError) throw rpcError;
+      
+      const response = data as InviteUserResponse;
+      if (!response) throw new Error("No response from server");
+      if (!response.success) {
+        throw new Error(response.error || "Failed to invite user");
       }
 
       toast({
@@ -197,12 +205,12 @@ export default function UserList() {
     }
   };
 
-  const handleUpdateRole = async (userId: string, newRole: string) => {
+  const handleUpdateRole = async (userId: string, newRole: UserRole) => {
     try {
       const { error } = await supabase
-        .from('user_roles')
+        .from("user_roles")
         .update({ role: newRole })
-        .eq('user_id', userId);
+        .eq("user_id", userId);
 
       if (error) throw error;
 
@@ -299,7 +307,7 @@ export default function UserList() {
 
   // Filter users based on search query and role filter
   const filteredUsers = users.filter((user) => {
-    const userName = user.user_metadata?.full_name || '';
+    const userName = user.user_metadata?.full_name || "";
     const matchesSearch =
       userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase());
@@ -406,7 +414,12 @@ export default function UserList() {
               />
             </div>
             <div className="w-full md:w-48">
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <Select
+                value={roleFilter}
+                onValueChange={(value: string) => 
+                  setRoleFilter(value as "all" | UserRole)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Filter by role" />
                 </SelectTrigger>
@@ -443,7 +456,9 @@ export default function UserList() {
                             <AvatarImage src={user.user_metadata.avatar_url} />
                           ) : (
                             <AvatarFallback>
-                              {getInitials(user.user_metadata?.full_name || user.email)}
+                              {getInitials(
+                                user.user_metadata?.full_name || user.email,
+                              )}
                             </AvatarFallback>
                           )}
                         </Avatar>
@@ -460,7 +475,9 @@ export default function UserList() {
                     <TableCell>
                       <Select
                         value={user.role}
-                        onValueChange={(value) => handleUpdateRole(user.id, value)}
+                        onValueChange={(value) =>
+                          handleUpdateRole(user.id, value as UserRole)
+                        }
                       >
                         <SelectTrigger>
                           <SelectValue />

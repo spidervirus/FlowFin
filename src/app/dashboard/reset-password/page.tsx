@@ -2,12 +2,18 @@ import { createClient } from "@/lib/supabase/server";
 import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 async function resetPasswordAction(formData: FormData): Promise<void> {
-  'use server';
+  "use server";
 
-  const password = formData.get('password') as string;
+  const password = formData.get("password") as string;
   const supabase = await createClient();
 
   const { error } = await supabase.auth.updateUser({
@@ -15,7 +21,7 @@ async function resetPasswordAction(formData: FormData): Promise<void> {
   });
 
   if (error) {
-    throw new Error('Failed to reset password');
+    throw new Error("Failed to reset password");
   }
 }
 

@@ -10,7 +10,7 @@ export default function ResetPasswordPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const searchParams = useSearchParams();
   const errorMessage = searchParams.get("error");
   const successMessage = searchParams.get("success");
@@ -37,7 +37,7 @@ export default function ResetPasswordPage() {
       const formData = new FormData();
       formData.append("password", password);
       formData.append("confirmPassword", confirmPassword);
-      
+
       await resetPasswordAction(formData);
       // The action will handle the redirect
     } catch (error) {
@@ -132,4 +132,4 @@ export default function ResetPasswordPage() {
       </div>
     </div>
   );
-} 
+}

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     if (!goalId) {
       return NextResponse.json(
         { error: "Goal ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -37,17 +37,19 @@ export async function GET(request: NextRequest) {
     if (goalError || !goal) {
       return NextResponse.json(
         { error: "Goal not found or access denied" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     // Get contributions for the goal
     const { data: contributions, error } = await supabase
       .from("goal_contributions")
-      .select(`
+      .select(
+        `
         *,
         transaction:transactions(*)
-      `)
+      `,
+      )
       .eq("goal_id", goalId)
       .order("date", { ascending: false });
 
@@ -61,7 +63,7 @@ export async function GET(request: NextRequest) {
     console.error("Error in goal contributions GET:", error);
     return NextResponse.json(
       { error: "Failed to fetch goal contributions" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -87,7 +89,7 @@ export async function POST(request: NextRequest) {
     if (!goal_id || !amount || !date) {
       return NextResponse.json(
         { error: "Goal ID, amount, and date are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -95,7 +97,7 @@ export async function POST(request: NextRequest) {
     if (isNaN(amount) || amount <= 0) {
       return NextResponse.json(
         { error: "Amount must be a positive number" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
     if (goalError || !goal) {
       return NextResponse.json(
         { error: "Goal not found or access denied" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -126,7 +128,7 @@ export async function POST(request: NextRequest) {
       if (transactionError || !transaction) {
         return NextResponse.json(
           { error: "Transaction not found or access denied" },
-          { status: 404 }
+          { status: 404 },
         );
       }
     }
@@ -168,7 +170,7 @@ export async function POST(request: NextRequest) {
     console.error("Error in goal contribution POST:", error);
     return NextResponse.json(
       { error: "Failed to add goal contribution" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -182,7 +184,7 @@ export async function PUT(request: NextRequest) {
   if (!id) {
     return NextResponse.json(
       { error: "Contribution ID is required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -203,7 +205,7 @@ export async function PUT(request: NextRequest) {
     if (!amount || !date) {
       return NextResponse.json(
         { error: "Amount and date are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -211,37 +213,39 @@ export async function PUT(request: NextRequest) {
     if (isNaN(amount) || amount <= 0) {
       return NextResponse.json(
         { error: "Amount must be a positive number" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Check if contribution exists and belongs to user's goal
     const { data: existingContribution, error: fetchError } = await supabase
       .from("goal_contributions")
-      .select(`
+      .select(
+        `
         *,
         goal:financial_goals!goal_contributions_goal_id_fkey(user_id)
-      `)
+      `,
+      )
       .eq("id", id)
       .single();
 
     if (fetchError || !existingContribution) {
       return NextResponse.json(
         { error: "Contribution not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     // Check if the goal belongs to the user
     if (existingContribution.goal.user_id !== user.id) {
-      return NextResponse.json(
-        { error: "Access denied" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
     // If transaction_id is provided, check if it exists and belongs to user
-    if (transaction_id && transaction_id !== existingContribution.transaction_id) {
+    if (
+      transaction_id &&
+      transaction_id !== existingContribution.transaction_id
+    ) {
       const { data: transaction, error: transactionError } = await supabase
         .from("transactions")
         .select()
@@ -252,7 +256,7 @@ export async function PUT(request: NextRequest) {
       if (transactionError || !transaction) {
         return NextResponse.json(
           { error: "Transaction not found or access denied" },
-          { status: 404 }
+          { status: 404 },
         );
       }
     }
@@ -294,7 +298,7 @@ export async function PUT(request: NextRequest) {
     console.error("Error in goal contribution PUT:", error);
     return NextResponse.json(
       { error: "Failed to update goal contribution" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -308,7 +312,7 @@ export async function DELETE(request: NextRequest) {
   if (!id) {
     return NextResponse.json(
       { error: "Contribution ID is required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -325,26 +329,25 @@ export async function DELETE(request: NextRequest) {
     // Check if contribution exists and belongs to user's goal
     const { data: existingContribution, error: fetchError } = await supabase
       .from("goal_contributions")
-      .select(`
+      .select(
+        `
         *,
         goal:financial_goals!goal_contributions_goal_id_fkey(user_id)
-      `)
+      `,
+      )
       .eq("id", id)
       .single();
 
     if (fetchError || !existingContribution) {
       return NextResponse.json(
         { error: "Contribution not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     // Check if the goal belongs to the user
     if (existingContribution.goal.user_id !== user.id) {
-      return NextResponse.json(
-        { error: "Access denied" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
     const goalId = existingContribution.goal_id;
@@ -379,7 +382,7 @@ export async function DELETE(request: NextRequest) {
     console.error("Error in goal contribution DELETE:", error);
     return NextResponse.json(
       { error: "Failed to delete goal contribution" },
-      { status: 500 }
+      { status: 500 },
     );
   }
-} 
+}

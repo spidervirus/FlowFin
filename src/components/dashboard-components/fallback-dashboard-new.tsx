@@ -1,7 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
@@ -14,39 +21,41 @@ export default function FallbackDashboardNew() {
     const createSettings = async () => {
       try {
         console.log("Creating company settings from fallback dashboard");
-        
+
         // Use the API route to create company settings
-        const response = await fetch('/api/create-company-settings', {
-          method: 'POST',
+        const response = await fetch("/api/create-company-settings", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok) {
-          console.error('Error response from API:', data);
-          throw new Error(data.error || 'Failed to create company settings');
+          console.error("Error response from API:", data);
+          throw new Error(data.error || "Failed to create company settings");
         }
-        
+
         console.log("Successfully created company settings:", data);
         setSuccess(true);
-        
+
         // Reload the page to show the dashboard
         setTimeout(() => {
           window.location.reload();
         }, 1000);
       } catch (err: any) {
         console.error("Error creating company settings:", err);
-        setError(err.message || "An error occurred while creating company settings");
+        setError(
+          err.message || "An error occurred while creating company settings",
+        );
         setIsCreating(false);
       }
     };
-    
+
     createSettings();
   }, []);
-  
+
   if (isCreating) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -54,7 +63,7 @@ export default function FallbackDashboardNew() {
           <CardHeader>
             <CardTitle>Setting Up Your Dashboard</CardTitle>
             <CardDescription>
-              We're creating your company settings...
+              We&apos;re creating your company settings...
             </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center py-6">
@@ -64,7 +73,7 @@ export default function FallbackDashboardNew() {
       </div>
     );
   }
-  
+
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -76,12 +85,13 @@ export default function FallbackDashboardNew() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-red-500 mb-4">
-              {error}
-            </p>
+            <p className="text-sm text-red-500 mb-4">{error}</p>
           </CardContent>
           <CardFooter>
-            <Button onClick={() => window.location.href = '/setup'} className="w-full">
+            <Button
+              onClick={() => (window.location.href = "/setup")}
+              className="w-full"
+            >
               Go to Setup
             </Button>
           </CardFooter>
@@ -89,7 +99,7 @@ export default function FallbackDashboardNew() {
       </div>
     );
   }
-  
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
       <Card className="w-full max-w-md">
@@ -112,4 +122,4 @@ export default function FallbackDashboardNew() {
       </Card>
     </div>
   );
-} 
+}

@@ -1,9 +1,11 @@
-'use client';
+"use client";
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { handleError, showErrorToast } from '@/lib/error-handler';
-import { Button } from '@/components/ui/button';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw } from "lucide-react";
+import { Component, ErrorInfo, ReactNode } from "react";
+
+import { handleError } from "@/lib/error-handler";
+
+import { Button } from "./ui/button";
 
 interface Props {
   children: ReactNode;
@@ -28,11 +30,11 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('Error caught by ErrorBoundary:', error, errorInfo);
-    
+    console.error("Error caught by ErrorBoundary:", error, errorInfo);
+
     // Process the error with our error handler
     const appError = handleError(error);
-    
+
     // Call the optional onError callback
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
@@ -61,9 +63,12 @@ class ErrorBoundary extends Component<Props, State> {
             <div className="flex justify-center">
               <AlertCircle className="h-16 w-16 text-destructive" />
             </div>
-            <h2 className="text-2xl font-bold tracking-tight">Something went wrong</h2>
+            <h2 className="text-2xl font-bold tracking-tight">
+              Something went wrong
+            </h2>
             <p className="text-muted-foreground">
-              {this.state.error?.message || 'An unexpected error occurred. Please try again.'}
+              {this.state.error?.message ||
+                "An unexpected error occurred. Please try again."}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button onClick={this.handleReset} variant="outline">
@@ -88,7 +93,7 @@ class ErrorBoundary extends Component<Props, State> {
 export function withErrorBoundary<P extends object>(
   Component: React.ComponentType<P>,
   fallback?: ReactNode,
-  onError?: (error: Error, errorInfo: ErrorInfo) => void
+  onError?: (error: Error, errorInfo: ErrorInfo) => void,
 ): React.FC<P> {
   const WithErrorBoundary: React.FC<P> = (props) => (
     <ErrorBoundary fallback={fallback} onError={onError}>
@@ -97,10 +102,10 @@ export function withErrorBoundary<P extends object>(
   );
 
   // Set display name for debugging
-  const displayName = Component.displayName || Component.name || 'Component';
+  const displayName = Component.displayName || Component.name || "Component";
   WithErrorBoundary.displayName = `WithErrorBoundary(${displayName})`;
 
   return WithErrorBoundary;
 }
 
-export default ErrorBoundary; 
+export default ErrorBoundary;

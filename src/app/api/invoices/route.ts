@@ -28,7 +28,12 @@ export async function POST(request: NextRequest) {
     const notes = (formData.get("notes") as string) || null;
 
     // Process line items
-    const lineItems: Array<{description: string; amount: number; quantity?: number; unit_price?: number}> = [];
+    const lineItems: Array<{
+      description: string;
+      amount: number;
+      quantity?: number;
+      unit_price?: number;
+    }> = [];
     let total_amount = 0;
 
     // Get all form keys to find line items
@@ -118,7 +123,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Redirect to the invoices page
-    const redirectUrl = new URL('/dashboard/invoices', request.url).toString();
+    const redirectUrl = new URL("/dashboard/invoices", request.url).toString();
     return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error("Error processing request:", error);

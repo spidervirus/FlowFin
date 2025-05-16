@@ -1,146 +1,269 @@
-import DashboardNavbar from "@/components/dashboard-navbar";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { createSupabaseClient } from '@/lib/supabase-client';
-import BudgetList from "@/components/budget-components/budget-list";
-import BudgetOverview from "@/components/budget-components/budget-overview";
+"use client";
+
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { CurrencyCode } from "@/lib/utils";
+import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
+import DashboardWrapper from "../dashboard-wrapper";
+import BudgetList from "@/components/budget-components/budget-list";
+import BudgetOverview from "@/components/budget-components/budget-overview";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import type { Budget, BudgetTracking, CompanySettings, Category } from "@/types/financial";
+import type { Database } from "@/types/supabase";
 
-export default async function BudgetsPage() {
-  const supabase = await createClient();
+interface DatabaseCategory {
+  id: string;
+  name: string;
+  type: "income" | "expense";
+  color: string | null;
+}
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+interface DatabaseBudgetTracking {
+  id: string;
+  budget_id: string;
+  category_id: string | null;
+  month: string;
+  planned_amount: number;
+  actual_amount: number;
+  created_at: string;
+  updated_at: string;
+  category: DatabaseCategory | null;
+}
 
-  if (!user) {
-    return redirect("/sign-in");
-  }
+interface CategoryData {
+  id: string;
+  budget_id: string;
+  user_id: string;
+  category_id: string;
+  amount: number;
+  category: DatabaseCategory | null;
+}
 
-  // Get company settings
-  const supabaseClient = createSupabaseClient();
-  const { data: settings } = await supabaseClient
-    .from('company_settings')
-    .select('*')
-    .single();
+export default function BudgetsPage() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [tracking, setTracking] = useState<BudgetTracking[]>([]);
+  const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [currency, setCurrency] = useState<CurrencyCode>("USD");
 
-  // Use default currency if settings don't exist
-  const currency = settings?.default_currency as CurrencyCode || 'USD';
+  useEffect(() => {
+    async function fetchData() {
+      setIsLoading(true);
+      try {
+        const supabaseClient = createClient();
 
-  // Initialize empty arrays for budgets and tracking
-  let budgets: any[] = [];
-  let tracking: any[] = [];
+        // Check if user is authenticated
+        const {
+          data: { user },
+        } = await supabaseClient.auth.getUser();
+        if (!user) {
+          router.push("/sign-in");
+          return;
+        }
 
-  // Only fetch budgets if company settings exist
-  if (settings) {
-    // Get current month for filtering - format as YYYY-MM-DD to avoid time zone issues
-    const currentDate = new Date();
-    const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-01`;
+        // Fetch company settings
+        const { data: settingsData, error: settingsError } =
+          await supabaseClient
+            .from("company_settings")
+            .select("*")
+            .eq("user_id", user.id)
+            .single();
 
-    // Get active budgets for current month
-    const { data: budgetsData, error } = await supabase
-      .from("budgets")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .lte("start_date", currentDate.toISOString().split('T')[0])
-      .gte("end_date", currentDate.toISOString().split('T')[0])
-      .order("created_at", { ascending: false });
+        if (settingsError) {
+          console.error("Error fetching company settings:", settingsError);
+          toast.error("Failed to load company settings");
+          return;
+        }
 
-    if (error) {
-      console.error("Error fetching budgets:", error);
-    } else if (budgetsData) {
-      budgets = budgetsData;
-    }
+        setSettings(settingsData);
+        if (settingsData?.default_currency) {
+          setCurrency(settingsData.default_currency as CurrencyCode);
+        }
 
-    // Get budget categories separately
-    if (budgets && budgets.length > 0) {
-      const budgetIds = budgets.map((budget) => budget.id);
-      const { data: categoriesData, error: categoriesError } = await supabase
-        .from("budget_categories")
-        .select(`
-          id,
-          budget_id,
-          amount,
-          category:categories(id, name, type, color)
-        `)
-        .in("budget_id", budgetIds);
+        // Get current month for filtering
+        const currentDate = new Date();
+        const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-01`;
 
-      if (categoriesError) {
-        console.error("Error fetching budget categories:", categoriesError);
-      } else if (categoriesData) {
-        // Add categories to each budget
-        budgets.forEach((budget) => {
-          budget.budget_categories = categoriesData.filter(
-            (item) => item.budget_id === budget.id
-          );
-        });
+        // Fetch active budgets
+        const { data: budgetsData, error: budgetsError } = await supabaseClient
+          .from("budgets")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("is_active", true)
+          .lte("start_date", currentDate.toISOString().split("T")[0])
+          .gte("end_date", currentDate.toISOString().split("T")[0])
+          .order("created_at", { ascending: false });
+
+        if (budgetsError) {
+          console.error("Error fetching budgets:", budgetsError);
+          toast.error("Failed to load budgets");
+          return;
+        }
+
+        if (budgetsData && budgetsData.length > 0) {
+          const budgetIds = budgetsData.map((budget) => budget.id);
+
+          // Fetch budget categories
+          const { data: rawCategoriesData, error: categoriesError } =
+            await supabaseClient
+              .from("budget_categories")
+              .select(
+                `
+                id,
+                budget_id,
+                user_id,
+                category_id,
+                amount,
+                category:categories(id, name, type, color)
+              `,
+              )
+              .in("budget_id", budgetIds)
+              .eq("user_id", user.id);
+
+          if (categoriesError) {
+            console.error("Error fetching budget categories:", categoriesError);
+            toast.error("Failed to load budget categories");
+            return;
+          }
+
+          // Add categories to each budget
+          const categoriesData = (rawCategoriesData as unknown) as CategoryData[];
+          const budgetsWithCategories = budgetsData.map((budget) => ({
+            ...budget,
+            budget_categories: categoriesData
+              .filter((item) => item.budget_id === budget.id)
+              .map((item) => ({
+                ...item,
+                category: item.category ? {
+                  id: item.category.id,
+                  name: item.category.name,
+                  type: item.category.type || "expense",
+                  color: item.category.color
+                } as Category : undefined
+              }))
+          })) as Budget[];
+
+          setBudgets(budgetsWithCategories);
+
+          // Fetch budget tracking data
+          const { data: trackingData, error: trackingError } =
+            await supabaseClient
+              .from("budget_tracking")
+              .select(`
+                *,
+                category:categories(id, name, type, color)
+              `)
+              .eq("user_id", user.id)
+              .gte("month", currentMonth);
+
+          if (trackingError) {
+            console.error("Error fetching budget tracking:", trackingError);
+            toast.error("Failed to load budget tracking data");
+            return;
+          }
+
+          // Transform the tracking data to match BudgetTracking interface
+          const transformedTracking: BudgetTracking[] = (trackingData || []).map((item: DatabaseBudgetTracking) => ({
+            id: item.id,
+            user_id: user.id,
+            budget_id: item.budget_id,
+            amount: item.planned_amount,
+            spent: item.actual_amount,
+            remaining: item.planned_amount - item.actual_amount,
+            category: item.category ? {
+              id: item.category.id,
+              name: item.category.name,
+              type: item.category.type,
+              color: item.category.color,
+              parent_id: null, // Default values for required fields
+              is_active: true,
+              created_at: item.created_at,
+              updated_at: item.updated_at,
+              user_id: user.id,
+              is_default: false
+            } : undefined,
+            created_at: item.created_at,
+            updated_at: item.updated_at
+          }));
+
+          setTracking(transformedTracking);
+        } else {
+          setBudgets([]);
+          setTracking([]);
+        }
+      } catch (error) {
+        console.error("Error in fetchData:", error);
+        toast.error("An error occurred while loading data");
+      } finally {
+        setIsLoading(false);
       }
     }
 
-    // Get budget tracking data for current month
-    if (budgets && budgets.length > 0) {
-      const budgetIds = budgets.map((budget) => budget.id);
-      const { data: trackingData, error: trackingError } = await supabase
-        .from("budget_tracking")
-        .select(`
-          *,
-          category:categories(id, name, type, color)
-        `)
-        .in("budget_id", budgetIds)
-        .eq("month", currentMonth);
+    fetchData();
 
-      if (trackingError) {
-        console.error("Error fetching budget tracking:", trackingError);
-      } else if (trackingData) {
-        tracking = trackingData;
-        
-        // Add tracking data to each budget
-        budgets.forEach((budget) => {
-          budget.tracking = tracking.filter(
-            (item) => item.budget_id === budget.id
-          );
-        });
-      }
-    }
+    // Set up real-time subscription for budget updates
+    const supabaseClient = createClient();
+    const budgetsSubscription = supabaseClient
+      .channel("budgets_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "budgets",
+          filter: `user_id=eq.${supabaseClient.auth.getUser().then(({ data: { user } }) => user?.id)}`,
+        },
+        () => {
+          fetchData();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      budgetsSubscription.unsubscribe();
+    };
+  }, [router]);
+
+  if (isLoading) {
+    return (
+      <DashboardWrapper>
+        <div className="flex justify-center items-center h-[60vh]">
+          <p className="text-lg">Loading budgets...</p>
+        </div>
+      </DashboardWrapper>
+    );
   }
 
   return (
-    <>
-      <DashboardNavbar />
-      <main className="w-full bg-gray-50 min-h-screen">
-        <div className="container mx-auto px-4 py-8 flex flex-col gap-8">
-          {/* Header Section */}
-          <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold">Budget Management</h1>
-              <p className="text-muted-foreground">
-                Create and manage your budgets to track spending
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <Link href="/dashboard/budgets/new">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" /> Create Budget
-                </Button>
-              </Link>
-            </div>
-          </header>
-
-          {/* Budget Overview */}
-          <section className="grid grid-cols-1 gap-6">
-            <BudgetOverview budgets={budgets || []} tracking={tracking} currency={currency} />
-          </section>
-
-          {/* Budget List */}
-          <section className="grid grid-cols-1 gap-6">
-            <BudgetList budgets={budgets || []} currency={currency} />
-          </section>
+    <DashboardWrapper>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 mb-8">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold">Budgets</h1>
+            <Link href="/dashboard/budgets/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Budget
+              </Button>
+            </Link>
+          </div>
+          <p className="text-muted-foreground">
+            Manage your budgets and track your spending across different
+            categories
+          </p>
         </div>
-      </main>
-    </>
+
+        <BudgetOverview
+          budgets={budgets}
+          tracking={tracking}
+          currency={currency}
+        />
+        <BudgetList budgets={budgets} tracking={tracking} currency={currency} />
+      </div>
+    </DashboardWrapper>
   );
-} 
+}

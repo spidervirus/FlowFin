@@ -108,26 +108,30 @@ export default function PredictiveAnalytics() {
                 ].map((item, index) => (
                   <div
                     key={index}
-                    className={`flex-1 flex flex-col items-center gap-2 ${('prediction' in item && item.prediction) ? "opacity-70" : ""}`}
+                    className={`flex-1 flex flex-col items-center gap-2 ${"prediction" in item && item.prediction ? "opacity-70" : ""}`}
                   >
                     <div className="w-full flex justify-between items-end h-[240px]">
                       <div
                         className={`h-[${
                           item.income > item.expenses ? "60%" : "40%"
                         }] w-8 bg-green-500 rounded-t-md ${
-                          'prediction' in item && item.prediction ? "bg-opacity-50" : ""
+                          "prediction" in item && item.prediction
+                            ? "bg-opacity-50"
+                            : ""
                         }`}
                       ></div>
                       <div
                         className={`h-[${
                           item.income < item.expenses ? "60%" : "40%"
                         }] w-8 bg-red-500 rounded-t-md ${
-                          'prediction' in item && item.prediction ? "bg-opacity-50" : ""
+                          "prediction" in item && item.prediction
+                            ? "bg-opacity-50"
+                            : ""
                         }`}
                       ></div>
                     </div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
-                      {'prediction' in item && item.prediction && (
+                      {"prediction" in item && item.prediction && (
                         <TrendingUp className="h-3 w-3 text-blue-500" />
                       )}
                       {item.month}

@@ -1,66 +1,74 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
   Legend,
-  TooltipProps
+  TooltipProps,
 } from "recharts";
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  AlertCircle, 
-  RefreshCw, 
-  DollarSign, 
-  Calendar, 
-  PiggyBank, 
-  ShoppingBag, 
-  Coffee, 
-  Utensils, 
-  Home, 
-  Car, 
-  CreditCard, 
-  Lightbulb
+import {
+  TrendingUp,
+  TrendingDown,
+  AlertCircle,
+  RefreshCw,
+  DollarSign,
+  Calendar,
+  PiggyBank,
+  ShoppingBag,
+  Coffee,
+  Utensils,
+  Home,
+  Car,
+  CreditCard,
+  Lightbulb,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Transaction, Category } from "@/types/financial";
+import { Category } from "@/types/financial";
 import { CurrencyCode, CURRENCY_CONFIG } from "@/lib/utils";
 import { toast } from "sonner";
+import { Database } from "@/lib/supabase/database.types";
+
+type DbTransaction = Database["public"]["Tables"]["transactions"]["Row"];
+type DbCategory = Database["public"]["Tables"]["categories"]["Row"];
+
+type Transaction = DbTransaction & {
+  category?: DbCategory;
+};
 
 interface SpendingInsight {
   title: string;
   description: string;
-  type: "positive" | "negative" | "neutral" | "suggestion";
+  type: "positive" | "negative" | "neutral" | "suggestion" | "warning" | "info";
   icon: JSX.Element;
   value?: string;
   change?: number;
 }
 
 interface CategorySpending {
-  name: string;
+  category: DbCategory;
   amount: number;
-  color: string;
+  percentage: number;
 }
 
 interface MonthlySpending {
@@ -68,21 +76,27 @@ interface MonthlySpending {
   amount: number;
 }
 
-interface CategoryData {
-  id?: string;
-  name?: string;
-  type?: string;
-  color?: string;
-}
-
 interface CompanySettings {
-  company_name: string;
+  id: string;
+  user_id: string;
+  company_name?: string;
   default_currency: CurrencyCode;
-  fiscal_year_start: string;
-  industry: string;
+  country?: string;
+  fiscal_year_start?: string;
+  created_at: string;
+  updated_at: string;
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1'];
+const COLORS = [
+  "#0088FE",
+  "#00C49F",
+  "#FFBB28",
+  "#FF8042",
+  "#8884d8",
+  "#82ca9d",
+  "#ffc658",
+  "#8dd1e1",
+];
 
 interface SpendingInsightsProps {
   currency: CurrencyCode;
@@ -92,425 +106,477 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<DbCategory[]>([]);
   const [insights, setInsights] = useState<SpendingInsight[]>([]);
   const [categorySpending, setCategorySpending] = useState<CategorySpending[]>([]);
   const [monthlySpending, setMonthlySpending] = useState<MonthlySpending[]>([]);
   const [savingSuggestions, setSavingSuggestions] = useState<SpendingInsight[]>([]);
-  const [timeframe, setTimeframe] = useState<"30days" | "90days" | "6months" | "12months">("30days");
+  const [timeframe, setTimeframe] = useState<"1M" | "3M" | "6M" | "1Y">("1M");
   const [settings, setSettings] = useState<CompanySettings | null>(null);
 
   useEffect(() => {
     fetchData();
-  }, [timeframe]);
+  }, []);
 
   useEffect(() => {
     if (transactions.length > 0 && categories.length > 0) {
-      analyzeSpendingPatterns();
+      analyzeSpendingPatterns(transactions);
     }
   }, [transactions, categories, timeframe]);
 
   const fetchData = async () => {
-    setIsLoading(true);
-    setError(null);
-    
     try {
       const supabase = createClient();
-      
+
       // Get user
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
       if (userError) throw userError;
       if (!user) {
-        setError("User not authenticated");
+        toast.error("Please sign in to view spending insights");
         return;
       }
 
       // Fetch company settings
       const { data: settingsData, error: settingsError } = await supabase
-        .from('company_settings')
-        .select('*')
-        .eq('user_id', user.id)
+        .from("company_settings")
+        .select("*")
+        .eq("user_id", user.id)
         .single();
 
       if (settingsError) {
-        console.error('Error fetching company settings:', settingsError);
-        toast.error('Failed to load company settings');
+        console.error("Error fetching company settings:", settingsError);
+        toast.error("Failed to load company settings");
         return;
       }
 
       setSettings(settingsData);
-      
-      // Get date range based on timeframe and fiscal year start
+
+      // Get date range based on timeframe
       const endDate = new Date();
       const startDate = new Date();
-      const fiscalYearStart = parseInt(settingsData?.fiscal_year_start || '1');
-      
+
       switch (timeframe) {
-        case "30days":
-          startDate.setDate(startDate.getDate() - 30);
+        case "1M":
+          startDate.setMonth(startDate.getMonth() - 1);
           break;
-        case "90days":
-          startDate.setDate(startDate.getDate() - 90);
+        case "3M":
+          startDate.setMonth(startDate.getMonth() - 3);
           break;
-        case "6months":
+        case "6M":
           startDate.setMonth(startDate.getMonth() - 6);
           break;
-        case "12months":
-          // Adjust for fiscal year
-          const currentMonth = endDate.getMonth() + 1;
-          if (currentMonth < fiscalYearStart) {
-            startDate.setFullYear(startDate.getFullYear() - 1);
-            startDate.setMonth(fiscalYearStart - 1);
-          } else {
-            startDate.setMonth(fiscalYearStart - 1);
-          }
+        case "1Y":
+          startDate.setFullYear(startDate.getFullYear() - 1);
           break;
       }
-      
-      // Fetch transactions
+
+      // Fetch transactions with categories
       const { data: transactionsData, error: transactionsError } = await supabase
         .from("transactions")
-        .select("*, category:category_id(id, name, type, color)")
-        .eq('user_id', user.id)
-        .gte("date", startDate.toISOString().split('T')[0])
-        .lte("date", endDate.toISOString().split('T')[0])
+        .select("*, category:categories(*)")
+        .eq("user_id", user.id)
+        .eq("type", "expense")
+        .gte("date", startDate.toISOString().split("T")[0])
+        .lte("date", endDate.toISOString().split("T")[0])
         .order("date", { ascending: false });
-      
+
       if (transactionsError) {
-        throw new Error(`Error fetching transactions: ${transactionsError.message}`);
+        toast.error("Failed to fetch transactions");
+        return;
       }
-      
+
+      if (transactionsData) {
+        const transformedTransactions: Transaction[] = transactionsData.map((t) => ({
+          ...t,
+          category: t.category || undefined,
+        }));
+        setTransactions(transformedTransactions);
+      }
+
       // Fetch categories
       const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
         .select("*")
-        .eq('user_id', user.id)
-        .eq("is_active", true);
-      
-      if (categoriesError) {
-        throw new Error(`Error fetching categories: ${categoriesError.message}`);
-      }
-      
-      setTransactions(transactionsData || []);
-      setCategories(categoriesData || []);
+        .eq("user_id", user.id)
+        .eq("type", "expense");
 
-      // Show success message
-      toast.success('Data refreshed successfully');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-      setError(errorMessage);
-      toast.error(`Error: ${errorMessage}`);
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+      if (categoriesError) {
+        toast.error("Failed to fetch categories");
+        return;
+      }
+
+      if (categoriesData) {
+        setCategories(categoriesData);
+      }
+
+      toast.success("Data loaded successfully");
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast.error("An error occurred while fetching data");
     }
   };
 
-  const analyzeSpendingPatterns = () => {
+  const analyzeSpendingPatterns = (transactions: Transaction[]) => {
     // Filter expense transactions
-    const expenses = transactions.filter(t => t.type === "expense");
-    
+    const expenses = transactions.filter((t) => t.type === "expense");
+
     if (expenses.length === 0) {
-      setInsights([{
-        title: "Not enough data",
-        description: "We need more transaction data to generate insights.",
-        type: "neutral",
-        icon: <AlertCircle className="h-5 w-5 text-gray-500" />
-      }]);
+      setInsights([
+        {
+          title: "Not enough data",
+          description: "We need more transaction data to generate insights.",
+          type: "neutral",
+          icon: <AlertCircle className="h-5 w-5 text-gray-500" />,
+        },
+      ]);
       return;
     }
-    
+
     // Calculate total spending
     const totalSpending = expenses.reduce((sum, t) => sum + t.amount, 0);
-    
+
     // Calculate average daily spending
-    const dateRange = getDateRangeInDays();
-    const avgDailySpending = totalSpending / dateRange;
-    
+    const dateRange = getDateRange(expenses);
+    const days = Math.max(1, dateRange);
+    const averageDailySpending = totalSpending / days;
+
     // Group spending by category
-    const categoryMap = new Map<string, number>();
-    const categoryColorMap = new Map<string, string>();
-    
-    expenses.forEach(expense => {
-      const categoryData = expense.category as CategoryData | null;
-      const categoryName = categoryData?.name || "Uncategorized";
-      const categoryColor = categoryData?.color || "#888888";
-      
-      categoryMap.set(
-        categoryName, 
-        (categoryMap.get(categoryName) || 0) + expense.amount
-      );
-      
-      categoryColorMap.set(categoryName, categoryColor);
+    const categoryTotals: { [key: string]: number } = {};
+    expenses.forEach((t) => {
+      if (t.category) {
+        const categoryName = t.category.name;
+        categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + t.amount;
+      }
     });
-    
-    // Convert to array and sort by amount
-    const categorySpendings: CategorySpending[] = Array.from(categoryMap.entries())
-      .map(([name, amount]) => ({
-        name,
-        amount,
-        color: categoryColorMap.get(name) || "#888888"
-      }))
+
+    // Calculate category spending percentages
+    const categorySpending: CategorySpending[] = Object.entries(categoryTotals)
+      .map(([name, amount]) => {
+        const category = categories.find((c) => c.name === name);
+        if (!category) return null;
+        return {
+          category,
+          amount,
+          percentage: (amount / totalSpending) * 100,
+        };
+      })
+      .filter((item): item is CategorySpending => item !== null)
       .sort((a, b) => b.amount - a.amount);
-    
-    setCategorySpending(categorySpendings);
-    
+
+    setCategorySpending(categorySpending);
+
     // Calculate monthly spending
     const monthlyData = calculateMonthlySpending(expenses);
     setMonthlySpending(monthlyData);
-    
+
     // Generate insights
     const newInsights: SpendingInsight[] = [];
-    
+
     // Top spending category
-    if (categorySpendings.length > 0) {
-      const topCategory = categorySpendings[0];
-      const topCategoryPercentage = Math.round((topCategory.amount / totalSpending) * 100);
-      
+    if (categorySpending.length > 0) {
+      const topCategory = categorySpending[0];
+      const topCategoryPercentage = Math.round(
+        (topCategory.amount / totalSpending) * 100,
+      );
+
       newInsights.push({
         title: "Top Spending Category",
-        description: `${topCategory.name} accounts for ${topCategoryPercentage}% of your expenses.`,
+        description: `${topCategory.category.name} accounts for ${topCategoryPercentage}% of your expenses.`,
         type: "neutral",
         icon: <ShoppingBag className="h-5 w-5 text-blue-500" />,
-        value: formatCurrency(topCategory.amount)
+        value: formatCurrency(topCategory.amount),
       });
     }
-    
+
     // Monthly trend
     if (monthlyData.length >= 2) {
       const currentMonth = monthlyData[monthlyData.length - 1];
       const previousMonth = monthlyData[monthlyData.length - 2];
-      
-      const monthlyChange = ((currentMonth.amount - previousMonth.amount) / previousMonth.amount) * 100;
-      
+
+      const monthlyChange =
+        ((currentMonth.amount - previousMonth.amount) / previousMonth.amount) *
+        100;
+
       newInsights.push({
         title: "Monthly Spending Trend",
-        description: monthlyChange > 0 
-          ? `Your spending increased by ${Math.abs(monthlyChange).toFixed(1)}% compared to last month.`
-          : `Your spending decreased by ${Math.abs(monthlyChange).toFixed(1)}% compared to last month.`,
+        description:
+          monthlyChange > 0
+            ? `Your spending increased by ${Math.abs(monthlyChange).toFixed(1)}% compared to last month.`
+            : `Your spending decreased by ${Math.abs(monthlyChange).toFixed(1)}% compared to last month.`,
         type: monthlyChange > 0 ? "negative" : "positive",
-        icon: monthlyChange > 0 
-          ? <TrendingUp className="h-5 w-5 text-red-500" />
-          : <TrendingDown className="h-5 w-5 text-green-500" />,
-        change: monthlyChange
+        icon:
+          monthlyChange > 0 ? (
+            <TrendingUp className="h-5 w-5 text-red-500" />
+          ) : (
+            <TrendingDown className="h-5 w-5 text-green-500" />
+          ),
+        change: monthlyChange,
       });
     }
-    
+
     // Daily average
     newInsights.push({
       title: "Daily Average",
-      description: `You spend an average of ${formatCurrency(avgDailySpending)} per day.`,
+      description: `You spend an average of ${formatCurrency(averageDailySpending)} per day.`,
       type: "neutral",
       icon: <Calendar className="h-5 w-5 text-purple-500" />,
-      value: formatCurrency(avgDailySpending)
+      value: formatCurrency(averageDailySpending),
     });
-    
+
     // Unusual spending
     const unusualSpending = findUnusualSpending(expenses);
     if (unusualSpending) {
       newInsights.push(unusualSpending);
     }
-    
+
     setInsights(newInsights);
-    
+
     // Generate saving suggestions
-    generateSavingSuggestions(expenses, categorySpendings);
+    generateSavingSuggestions(expenses, categorySpending);
   };
 
-  const getDateRangeInDays = (): number => {
-    switch (timeframe) {
-      case "30days": return 30;
-      case "90days": return 90;
-      case "6months": return 180;
-      case "12months": return 365;
-      default: return 30;
-    }
+  const getDateRange = (transactions: Transaction[]): number => {
+    const endDate = new Date();
+    const startDate = new Date();
+
+    transactions.forEach((t) => {
+      const transactionDate = new Date(t.date);
+      if (transactionDate < startDate) {
+        startDate.setTime(transactionDate.getTime());
+      }
+      if (transactionDate > endDate) {
+        endDate.setTime(transactionDate.getTime());
+      }
+    });
+
+    const timeDiff = Math.abs(endDate.getTime() - startDate.getTime());
+    const days = Math.ceil(timeDiff / (1000 * 3600 * 24));
+    return days;
   };
 
-  const calculateMonthlySpending = (expenses: Transaction[]): MonthlySpending[] => {
+  const calculateMonthlySpending = (
+    expenses: Transaction[],
+  ): MonthlySpending[] => {
     const monthlyMap = new Map<string, number>();
-    
-    expenses.forEach(expense => {
+
+    expenses.forEach((expense) => {
       const date = new Date(expense.date);
-      const monthYear = `${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
-      
+      const monthYear = `${date.toLocaleString("default", { month: "short" })} ${date.getFullYear()}`;
+
       monthlyMap.set(
         monthYear,
-        (monthlyMap.get(monthYear) || 0) + expense.amount
+        (monthlyMap.get(monthYear) || 0) + expense.amount,
       );
     });
-    
+
     // Convert to array and sort by date
     return Array.from(monthlyMap.entries())
       .map(([month, amount]) => ({ month, amount }))
       .sort((a, b) => {
-        const [aMonth, aYear] = a.month.split(' ');
-        const [bMonth, bYear] = b.month.split(' ');
-        
+        const [aMonth, aYear] = a.month.split(" ");
+        const [bMonth, bYear] = b.month.split(" ");
+
         if (aYear !== bYear) {
           return parseInt(aYear) - parseInt(bYear);
         }
-        
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        const months = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
         return months.indexOf(aMonth) - months.indexOf(bMonth);
       });
   };
 
-  const findUnusualSpending = (expenses: Transaction[]): SpendingInsight | null => {
+  const findUnusualSpending = (
+    expenses: Transaction[],
+  ): SpendingInsight | null => {
     // Group by category and find unusually high spending
     const categoryAvg = new Map<string, number[]>();
-    
-    expenses.forEach(expense => {
-      const categoryData = expense.category as CategoryData | null;
-      const categoryName = categoryData?.name || "Uncategorized";
-      
+
+    expenses.forEach((expense) => {
+      const categoryName = expense.category?.name || "Uncategorized";
+
       if (!categoryAvg.has(categoryName)) {
         categoryAvg.set(categoryName, []);
       }
-      
+
       categoryAvg.get(categoryName)?.push(expense.amount);
     });
-    
+
     // Find category with unusually high spending
     let unusualCategory = "";
     let unusualAmount = 0;
     let unusualPercentage = 0;
-    
+
     categoryAvg.forEach((amounts, category) => {
       if (amounts.length < 2) return;
-      
+
       const total = amounts.reduce((sum, amount) => sum + amount, 0);
       const avg = total / amounts.length;
-      
+
       // Find the highest amount
       const highest = Math.max(...amounts);
-      
+
       // Calculate percentage above average
       const percentAboveAvg = ((highest - avg) / avg) * 100;
-      
+
       if (percentAboveAvg > 50 && percentAboveAvg > unusualPercentage) {
         unusualCategory = category;
         unusualAmount = highest;
         unusualPercentage = percentAboveAvg;
       }
     });
-    
+
     if (unusualCategory) {
       return {
         title: "Unusual Spending Detected",
         description: `Your highest ${unusualCategory} expense of ${formatCurrency(unusualAmount)} is ${Math.round(unusualPercentage)}% above your average.`,
         type: "negative",
         icon: <AlertCircle className="h-5 w-5 text-amber-500" />,
-        value: formatCurrency(unusualAmount)
+        value: formatCurrency(unusualAmount),
       };
     }
-    
+
     return null;
   };
 
-  const generateSavingSuggestions = (expenses: Transaction[], categorySpendings: CategorySpending[]) => {
+  const generateSavingSuggestions = (
+    expenses: Transaction[],
+    categorySpending: CategorySpending[],
+  ) => {
     const suggestions: SpendingInsight[] = [];
-    
-    // Dining out suggestion
-    const diningCategories = ["Dining", "Restaurants", "Food", "Coffee", "Cafe"];
-    const diningExpenses = expenses.filter(e => {
-      const categoryData = e.category as CategoryData | null;
-      return categoryData && diningCategories.some(c => 
-        categoryData.name?.toLowerCase().includes(c.toLowerCase())
-      );
+
+    // Check dining expenses
+    const diningExpenses = expenses.filter((e) => {
+      const categoryName = e.category?.name.toLowerCase() || "";
+      return categoryName.includes("dining");
     });
-    
+
     if (diningExpenses.length > 0) {
       const diningTotal = diningExpenses.reduce((sum, e) => sum + e.amount, 0);
-      const diningAvg = diningTotal / getDateRangeInDays() * 30; // Monthly average
-      
+      const diningAvg = (diningTotal / getDateRange(expenses)) * 30; // Monthly average
+
       if (diningAvg > 200) {
-        const potentialSavings = Math.round(diningAvg * 0.3); // 30% reduction
-        
         suggestions.push({
           title: "Reduce Dining Out",
-          description: `You spend about ${formatCurrency(diningAvg)} monthly on dining out. Cooking at home more often could save you around ${formatCurrency(potentialSavings)} per month.`,
+          description: `You spend about ${formatCurrency(diningAvg)} monthly on dining out. Cooking at home more often could save you around ${formatCurrency(Math.round(diningAvg * 0.3))} per month.`,
           type: "suggestion",
           icon: <Utensils className="h-5 w-5 text-green-500" />,
-          value: formatCurrency(potentialSavings)
+          value: formatCurrency(Math.round(diningAvg * 0.3)),
         });
       }
     }
-    
-    // Subscription suggestion
-    const subscriptionKeywords = ["subscription", "netflix", "spotify", "hulu", "disney", "apple", "amazon prime", "membership"];
-    const subscriptionExpenses = expenses.filter(e => {
-      const description = e.description?.toLowerCase() || '';
-      return subscriptionKeywords.some(keyword => description.includes(keyword));
+
+    // Check grocery expenses
+    const foodExpenses = expenses.filter((e) => {
+      const categoryName = e.category?.name.toLowerCase() || "";
+      return categoryName.includes("groceries");
     });
-    
-    if (subscriptionExpenses.length > 0) {
-      const subscriptionTotal = subscriptionExpenses.reduce((sum, e) => sum + e.amount, 0);
-      
-      suggestions.push({
-        title: "Review Subscriptions",
-        description: `You've spent ${formatCurrency(subscriptionTotal)} on subscriptions. Consider reviewing which ones you actually use regularly.`,
-        type: "suggestion",
-        icon: <CreditCard className="h-5 w-5 text-green-500" />,
-        value: formatCurrency(subscriptionTotal)
-      });
-    }
-    
-    // Coffee suggestion
-    const foodKeywords = ["food", "restaurant", "grocery", "meal", "dining", "cafe", "coffee", "takeout"];
-    const foodExpenses = expenses.filter(e => {
-      const description = e.description?.toLowerCase() || '';
-      return foodKeywords.some(keyword => description.includes(keyword));
-    });
-    
+
     if (foodExpenses.length >= 5) {
       const foodTotal = foodExpenses.reduce((sum, e) => sum + e.amount, 0);
-      const foodAvg = foodTotal / getDateRangeInDays() * 30; // Monthly average
-      
+      const foodAvg = (foodTotal / getDateRange(expenses)) * 30; // Monthly average
+
       if (foodAvg > 50) {
         suggestions.push({
           title: "Food Expenses",
           description: `You spend about ${formatCurrency(foodAvg)} monthly on food. Cooking at home more often could save you around ${formatCurrency(Math.round(foodAvg * 0.7))} per month.`,
           type: "suggestion",
           icon: <Coffee className="h-5 w-5 text-green-500" />,
-          value: formatCurrency(Math.round(foodAvg * 0.7))
+          value: formatCurrency(Math.round(foodAvg * 0.7)),
         });
       }
     }
-    
-    // General saving suggestion based on top category
-    if (categorySpendings.length > 0) {
-      const topCategory = categorySpendings[0];
-      const potentialSavings = Math.round(topCategory.amount * 0.1); // 10% reduction
-      
+
+    // Subscription suggestion
+    const subscriptionKeywords = [
+      "subscription",
+      "netflix",
+      "spotify",
+      "hulu",
+      "disney",
+      "apple",
+      "amazon prime",
+      "membership",
+    ];
+    const subscriptionExpenses = expenses.filter((e) => {
+      const description = e.description?.toLowerCase() || "";
+      return subscriptionKeywords.some((keyword) =>
+        description.includes(keyword),
+      );
+    });
+
+    if (subscriptionExpenses.length > 0) {
+      const subscriptionTotal = subscriptionExpenses.reduce(
+        (sum, e) => sum + e.amount,
+        0,
+      );
+
       suggestions.push({
-        title: `Reduce ${topCategory.name} Expenses`,
-        description: `Your highest spending category is ${topCategory.name}. Reducing these expenses by just 10% would save you ${formatCurrency(potentialSavings)}.`,
+        title: "Review Subscriptions",
+        description: `You've spent ${formatCurrency(subscriptionTotal)} on subscriptions. Consider reviewing which ones you actually use regularly.`,
         type: "suggestion",
-        icon: <PiggyBank className="h-5 w-5 text-green-500" />,
-        value: formatCurrency(potentialSavings)
+        icon: <CreditCard className="h-5 w-5 text-green-500" />,
+        value: formatCurrency(subscriptionTotal),
       });
     }
-    
+
+    // General saving suggestion based on top category
+    if (categorySpending.length > 0) {
+      const topCategory = categorySpending[0];
+      const potentialSavings = Math.round(topCategory.amount * 0.1); // 10% reduction
+
+      suggestions.push({
+        title: `Reduce ${topCategory.category.name} Expenses`,
+        description: `Your highest spending category is ${topCategory.category.name}. Reducing these expenses by just 10% would save you ${formatCurrency(potentialSavings)}.`,
+        type: "suggestion",
+        icon: <PiggyBank className="h-5 w-5 text-green-500" />,
+        value: formatCurrency(potentialSavings),
+      });
+    }
+
     // Add a general tip
     suggestions.push({
       title: "50/30/20 Rule",
-      description: "Consider following the 50/30/20 budget rule: 50% on needs, 30% on wants, and 20% on savings and debt repayment.",
+      description:
+        "Consider following the 50/30/20 budget rule: 50% on needs, 30% on wants, and 20% on savings and debt repayment.",
       type: "suggestion",
-      icon: <Lightbulb className="h-5 w-5 text-yellow-500" />
+      icon: <Lightbulb className="h-5 w-5 text-yellow-500" />,
     });
-    
+
     setSavingSuggestions(suggestions);
   };
 
   const formatCurrency = (amount: number) => {
     const currencyCode = settings?.default_currency || currency;
-    return new Intl.NumberFormat(CURRENCY_CONFIG[currencyCode]?.locale || 'en-US', {
-      style: "currency",
-      currency: currencyCode,
-      minimumFractionDigits: CURRENCY_CONFIG[currencyCode]?.minimumFractionDigits ?? 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
+    return new Intl.NumberFormat(
+      CURRENCY_CONFIG[currencyCode]?.locale || "en-US",
+      {
+        style: "currency",
+        currency: currencyCode,
+        minimumFractionDigits:
+          CURRENCY_CONFIG[currencyCode]?.minimumFractionDigits ?? 2,
+        maximumFractionDigits: 2,
+      },
+    ).format(amount);
+  };
+
+  const handleTimeframeChange = (newTimeframe: "1M" | "3M" | "6M" | "1Y") => {
+    setTimeframe(newTimeframe);
   };
 
   return (
@@ -520,7 +586,7 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
           <div>
             <CardTitle>Spending Insights</CardTitle>
             <CardDescription>
-              {settings?.company_name ? `${settings.company_name} - ` : ''}
+              {settings?.company_name ? `${settings.company_name} - ` : ""}
               AI-powered analysis of your spending patterns
             </CardDescription>
           </div>
@@ -545,49 +611,53 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium">Time Period</h3>
               <div className="flex space-x-2">
-                <Button 
-                  variant={timeframe === "30days" ? "default" : "outline"} 
+                <Button
+                  variant={timeframe === "1M" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setTimeframe("30days")}
+                  onClick={() => handleTimeframeChange("1M")}
                 >
-                  30 Days
+                  1 Month
                 </Button>
-                <Button 
-                  variant={timeframe === "90days" ? "default" : "outline"} 
+                <Button
+                  variant={timeframe === "3M" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setTimeframe("90days")}
+                  onClick={() => handleTimeframeChange("3M")}
                 >
-                  90 Days
+                  3 Months
                 </Button>
-                <Button 
-                  variant={timeframe === "6months" ? "default" : "outline"} 
+                <Button
+                  variant={timeframe === "6M" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setTimeframe("6months")}
+                  onClick={() => handleTimeframeChange("6M")}
                 >
                   6 Months
                 </Button>
-                <Button 
-                  variant={timeframe === "12months" ? "default" : "outline"} 
+                <Button
+                  variant={timeframe === "1Y" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setTimeframe("12months")}
+                  onClick={() => handleTimeframeChange("1Y")}
                 >
-                  12 Months
+                  1 Year
                 </Button>
               </div>
             </div>
-            
+
             <Tabs defaultValue="insights">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="insights">Key Insights</TabsTrigger>
                 <TabsTrigger value="categories">Category Breakdown</TabsTrigger>
-                <TabsTrigger value="suggestions">Saving Suggestions</TabsTrigger>
+                <TabsTrigger value="suggestions">
+                  Saving Suggestions
+                </TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="insights" className="space-y-4 pt-4">
                 {insights.length === 0 ? (
                   <div className="text-center py-8">
                     <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium">No insights available</h3>
+                    <h3 className="text-lg font-medium">
+                      No insights available
+                    </h3>
                     <p className="text-muted-foreground">
                       We need more transaction data to generate insights.
                     </p>
@@ -598,17 +668,27 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
                       {insights.map((insight, index) => (
                         <Card key={index} className="overflow-hidden">
                           <CardHeader className="p-4 pb-2 flex flex-row items-center space-y-0 gap-2">
-                            <div className={`p-2 rounded-full ${
-                              insight.type === "positive" ? "bg-green-100" :
-                              insight.type === "negative" ? "bg-red-100" :
-                              insight.type === "suggestion" ? "bg-blue-100" : "bg-gray-100"
-                            }`}>
+                            <div
+                              className={`p-2 rounded-full ${
+                                insight.type === "positive"
+                                  ? "bg-green-100"
+                                  : insight.type === "negative"
+                                    ? "bg-red-100"
+                                    : insight.type === "suggestion"
+                                      ? "bg-blue-100"
+                                      : "bg-gray-100"
+                              }`}
+                            >
                               {insight.icon}
                             </div>
                             <div>
-                              <CardTitle className="text-base">{insight.title}</CardTitle>
+                              <CardTitle className="text-base">
+                                {insight.title}
+                              </CardTitle>
                               {insight.value && (
-                                <div className="text-2xl font-bold mt-1">{insight.value}</div>
+                                <div className="text-2xl font-bold mt-1">
+                                  {insight.value}
+                                </div>
                               )}
                             </div>
                           </CardHeader>
@@ -617,32 +697,49 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
                               {insight.description}
                             </p>
                             {insight.change !== undefined && (
-                              <Badge className={insight.change > 0 ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}>
-                                {insight.change > 0 ? "+" : ""}{insight.change.toFixed(1)}%
+                              <Badge
+                                className={
+                                  insight.change > 0
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-green-100 text-green-800"
+                                }
+                              >
+                                {insight.change > 0 ? "+" : ""}
+                                {insight.change.toFixed(1)}%
                               </Badge>
                             )}
                           </CardContent>
                         </Card>
                       ))}
                     </div>
-                    
+
                     {monthlySpending.length > 1 && (
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-base">Monthly Spending Trend</CardTitle>
+                          <CardTitle className="text-base">
+                            Monthly Spending Trend
+                          </CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
                               <BarChart
                                 data={monthlySpending}
-                                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                                margin={{
+                                  top: 5,
+                                  right: 30,
+                                  left: 20,
+                                  bottom: 5,
+                                }}
                               >
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="month" />
                                 <YAxis />
-                                <Tooltip 
-                                  formatter={(value: number) => [`${formatCurrency(value)}`, "Amount"]}
+                                <Tooltip
+                                  formatter={(value: number) => [
+                                    `${formatCurrency(value)}`,
+                                    "Amount",
+                                  ]}
                                 />
                                 <Bar dataKey="amount" fill="#8884d8" />
                               </BarChart>
@@ -654,12 +751,14 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
                   </>
                 )}
               </TabsContent>
-              
+
               <TabsContent value="categories" className="pt-4">
                 {categorySpending.length === 0 ? (
                   <div className="text-center py-8">
                     <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium">No category data available</h3>
+                    <h3 className="text-lg font-medium">
+                      No category data available
+                    </h3>
                     <p className="text-muted-foreground">
                       We need more transaction data to show category breakdown.
                     </p>
@@ -668,7 +767,9 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-base">Spending by Category</CardTitle>
+                        <CardTitle className="text-base">
+                          Spending by Category
+                        </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="h-64">
@@ -682,64 +783,102 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
                                 outerRadius={80}
                                 fill="#8884d8"
                                 dataKey="amount"
-                                nameKey="name"
-                                label={({ name, percent }: { name: string, percent: number }) => 
-                                  `${name} ${(percent * 100).toFixed(0)}%`
-                                }
+                                nameKey="category.name"
+                                label={({
+                                  name,
+                                  percent,
+                                }: {
+                                  name: string;
+                                  percent: number;
+                                }) => `${name} ${(percent * 100).toFixed(0)}%`}
                               >
                                 {categorySpending.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
+                                  <Cell
+                                    key={`cell-${index}`}
+                                    fill={
+                                      entry.category.color ||
+                                      COLORS[index % COLORS.length]
+                                    }
+                                  />
                                 ))}
                               </Pie>
-                              <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                              <Tooltip
+                                formatter={(value: number) =>
+                                  formatCurrency(value)
+                                }
+                              />
                               <Legend />
                             </PieChart>
                           </ResponsiveContainer>
                         </div>
                       </CardContent>
                     </Card>
-                    
+
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-base">Top Spending Categories</CardTitle>
+                        <CardTitle className="text-base">
+                          Top Spending Categories
+                        </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-4">
-                          {categorySpending.slice(0, 5).map((category, index) => (
-                            <div key={index} className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color || COLORS[index % COLORS.length] }}></div>
-                                <span>{category.name}</span>
+                          {categorySpending
+                            .slice(0, 5)
+                            .map((category, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="w-3 h-3 rounded-full"
+                                    style={{
+                                      backgroundColor:
+                                        category.category.color ||
+                                        COLORS[index % COLORS.length],
+                                    }}
+                                  ></div>
+                                  <span>{category.category.name}</span>
+                                </div>
+                                <span className="font-medium">
+                                  {formatCurrency(category.amount)}
+                                </span>
                               </div>
-                              <span className="font-medium">{formatCurrency(category.amount)}</span>
-                            </div>
-                          ))}
+                            ))}
                         </div>
                       </CardContent>
                     </Card>
                   </div>
                 )}
               </TabsContent>
-              
+
               <TabsContent value="suggestions" className="space-y-4 pt-4">
                 {savingSuggestions.length === 0 ? (
                   <div className="text-center py-8">
                     <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium">No suggestions available</h3>
+                    <h3 className="text-lg font-medium">
+                      No suggestions available
+                    </h3>
                     <p className="text-muted-foreground">
-                      We need more transaction data to generate saving suggestions.
+                      We need more transaction data to generate saving
+                      suggestions.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {savingSuggestions.map((suggestion, index) => (
-                      <Card key={index} className="overflow-hidden border-l-4 border-l-green-500">
+                      <Card
+                        key={index}
+                        className="overflow-hidden border-l-4 border-l-green-500"
+                      >
                         <CardHeader className="p-4 pb-2 flex flex-row items-center space-y-0 gap-2">
                           <div className="p-2 rounded-full bg-green-100">
                             {suggestion.icon}
                           </div>
                           <div>
-                            <CardTitle className="text-base">{suggestion.title}</CardTitle>
+                            <CardTitle className="text-base">
+                              {suggestion.title}
+                            </CardTitle>
                             {suggestion.value && (
                               <div className="text-lg font-bold mt-1 text-green-600">
                                 Potential Savings: {suggestion.value}
@@ -754,12 +893,14 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
                         </CardContent>
                       </Card>
                     ))}
-                    
+
                     <Alert className="bg-blue-50 border-blue-200">
                       <Lightbulb className="h-4 w-4 text-blue-600" />
                       <AlertTitle className="text-blue-800">Pro Tip</AlertTitle>
                       <AlertDescription className="text-blue-700">
-                        Setting up automatic transfers to a savings account on payday can help you save before you have a chance to spend.
+                        Setting up automatic transfers to a savings account on
+                        payday can help you save before you have a chance to
+                        spend.
                       </AlertDescription>
                     </Alert>
                   </div>
@@ -771,9 +912,11 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
       </CardContent>
       <CardFooter className="border-t px-6 py-4">
         <p className="text-xs text-muted-foreground">
-          These insights are generated based on your transaction history and are meant to help you understand your spending patterns. For professional financial advice, please consult a financial advisor.
+          These insights are generated based on your transaction history and are
+          meant to help you understand your spending patterns. For professional
+          financial advice, please consult a financial advisor.
         </p>
       </CardFooter>
     </Card>
   );
-} 
+}

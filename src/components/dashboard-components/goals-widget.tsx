@@ -1,9 +1,20 @@
 "use client";
 
 import { FinancialGoal } from "@/types/financial";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { CurrencyCode, CURRENCY_CONFIG, formatCurrency as formatCurrencyUtil } from "@/lib/utils";
+import {
+  CurrencyCode,
+  CURRENCY_CONFIG,
+  formatCurrency as formatCurrencyUtil,
+} from "@/lib/utils";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Plus, Target } from "lucide-react";
@@ -16,42 +27,45 @@ interface GoalsWidgetProps {
   isLoading?: boolean;
 }
 
-export default function GoalsWidget({ 
-  goals, 
+export default function GoalsWidget({
+  goals,
   currency: propCurrency,
-  isLoading = false 
+  isLoading = false,
 }: GoalsWidgetProps) {
   // Use the currency from context if available, otherwise use the prop
   const currencyContext = useContext(CurrencyContext);
-  const currency = propCurrency || currencyContext?.currency || 'USD';
+  const currency = propCurrency || currencyContext?.currency || "USD";
 
   const formatCurrency = (value: number) => {
     if (!currency || !CURRENCY_CONFIG[currency]) {
-      return new Intl.NumberFormat('en-US', {
+      return new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "USD",
         maximumFractionDigits: 0,
       }).format(value);
     }
-    
+
     return formatCurrencyUtil(value, currency, {
-      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits:
+        CURRENCY_CONFIG[currency].minimumFractionDigits ?? 0,
+      maximumFractionDigits: 0,
     });
   };
 
   // Sort goals by progress (lowest to highest)
   const sortedGoals = [...goals]
-    .filter(goal => !goal.is_completed)
+    .filter((goal) => !goal.is_completed)
     .sort((a, b) => {
-      const progressA = a.target_amount > 0 ? (a.current_amount / a.target_amount) : 0;
-      const progressB = b.target_amount > 0 ? (b.current_amount / b.target_amount) : 0;
+      const progressA =
+        a.target_amount > 0 ? a.current_amount / a.target_amount : 0;
+      const progressB =
+        b.target_amount > 0 ? b.current_amount / b.target_amount : 0;
       return progressA - progressB;
     });
-  
+
   // Get top 3 goals that need attention
   const topGoals = sortedGoals.slice(0, 3);
-  
+
   // Calculate days remaining for a goal
   const getDaysRemaining = (targetDate: string) => {
     const today = new Date();
@@ -60,17 +74,17 @@ export default function GoalsWidget({
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays > 0 ? diffDays : 0;
   };
-  
+
   // Format date to readable format
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
-  
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -93,18 +107,20 @@ export default function GoalsWidget({
         ) : (
           <div className="space-y-4">
             {topGoals.map((goal) => {
-              const percentage = goal.target_amount > 0 
-                ? (goal.current_amount / goal.target_amount) * 100 
-                : 0;
+              const percentage =
+                goal.target_amount > 0
+                  ? (goal.current_amount / goal.target_amount) * 100
+                  : 0;
               const daysRemaining = getDaysRemaining(goal.target_date);
-              
+
               return (
                 <div key={goal.id} className="space-y-2">
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="text-sm font-medium">{goal.name}</h3>
                       <p className="text-xs text-muted-foreground">
-                        Target: {formatCurrency(goal.target_amount)} • {daysRemaining} days left
+                        Target: {formatCurrency(goal.target_amount)} •{" "}
+                        {daysRemaining} days left
                       </p>
                     </div>
                     <div className="text-right">
@@ -120,7 +136,7 @@ export default function GoalsWidget({
                 </div>
               );
             })}
-            
+
             {goals.length > 3 && (
               <p className="text-xs text-center text-muted-foreground mt-2">
                 Showing {topGoals.length} of {goals.length} goals
@@ -139,4 +155,4 @@ export default function GoalsWidget({
       </CardFooter>
     </Card>
   );
-} 
+}

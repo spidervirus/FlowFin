@@ -1,80 +1,48 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 
-// Log levels
-export enum LogLevel {
-  DEBUG = 'DEBUG',
-  INFO = 'INFO',
-  WARN = 'WARN',
-  ERROR = 'ERROR'
-}
+type LogLevel = "info" | "warn" | "error" | "debug";
 
 interface LogMessage {
   level: LogLevel;
   message: string;
   timestamp: string;
   data?: any;
-  error?: Error;
 }
 
 class Logger {
-  private static instance: Logger;
-  private isProd: boolean;
-
-  private constructor() {
-    this.isProd = process.env.NODE_ENV === 'production';
-  }
-
-  public static getInstance(): Logger {
-    if (!Logger.instance) {
-      Logger.instance = new Logger();
-    }
-    return Logger.instance;
-  }
-
-  private formatMessage(level: LogLevel, message: string, data?: any, error?: Error): LogMessage {
-    return {
-      level,
-      message,
+  private static formatMessage(
+    message: string,
+    error?: Error,
+    data?: any,
+  ): string {
+    return JSON.stringify({
       timestamp: new Date().toISOString(),
-      data,
-      error
-    };
+      message,
+      ...(error && { error: { message: error.message, stack: error.stack } }),
+      ...(data && { data }),
+    });
   }
 
-  private log(logMessage: LogMessage) {
-    if (this.isProd) {
-      // In production, we would send this to a logging service
-      // TODO: Implement production logging service (e.g., CloudWatch, Datadog)
-      console.log(JSON.stringify(logMessage));
-    } else {
-      // In development, pretty print to console
-      const { level, message, timestamp, data, error } = logMessage;
-      console.log(`[${timestamp}] ${level}: ${message}`);
-      if (data) console.log('Data:', data);
-      if (error) console.error('Error:', error);
+  info(message: string, data?: any) {
+    console.info(Logger.formatMessage(message, undefined, data));
+  }
+
+  warn(message: string, data?: any) {
+    console.warn(Logger.formatMessage(message, undefined, data));
+  }
+
+  error(message: string, error?: Error, data?: any) {
+    console.error(Logger.formatMessage(message, error, data));
+  }
+
+  debug(message: string, data?: any) {
+    if (process.env.NODE_ENV === "development") {
+      console.debug(Logger.formatMessage(message, undefined, data));
     }
-  }
-
-  public debug(message: string, data?: any) {
-    if (!this.isProd) {
-      this.log(this.formatMessage(LogLevel.DEBUG, message, data));
-    }
-  }
-
-  public info(message: string, data?: any) {
-    this.log(this.formatMessage(LogLevel.INFO, message, data));
-  }
-
-  public warn(message: string, data?: any) {
-    this.log(this.formatMessage(LogLevel.WARN, message, data));
-  }
-
-  public error(message: string, error?: Error, data?: any) {
-    this.log(this.formatMessage(LogLevel.ERROR, message, data, error));
   }
 }
 
-export const logger = Logger.getInstance();
+export const logger = new Logger();
 
 // Custom error class for application errors
 export class AppError extends Error {
@@ -82,10 +50,10 @@ export class AppError extends Error {
     public message: string,
     public statusCode: number = 500,
     public code?: string,
-    public data?: any
+    public data?: any,
   ) {
     super(message);
-    this.name = 'AppError';
+    this.name = "AppError";
   }
 
   public toResponse() {
@@ -93,11 +61,11 @@ export class AppError extends Error {
       {
         error: {
           message: this.message,
-          code: this.code || 'INTERNAL_ERROR',
-          data: this.data
-        }
+          code: this.code || "INTERNAL_ERROR",
+          data: this.data,
+        },
       },
-      { status: this.statusCode }
+      { status: this.statusCode },
     );
   }
 }
@@ -105,31 +73,33 @@ export class AppError extends Error {
 // Error handler middleware
 export async function errorHandler(error: unknown) {
   if (error instanceof AppError) {
-    logger.error(error.message, error, error.data);
+    logger.error(error.message, error, { data: error.data });
     return error.toResponse();
   }
 
   if (error instanceof Error) {
-    logger.error('Unhandled error', error);
+    logger.error("Unhandled error", error);
     return NextResponse.json(
       {
         error: {
-          message: 'An unexpected error occurred',
-          code: 'INTERNAL_ERROR'
-        }
+          message: "An unexpected error occurred",
+          code: "INTERNAL_ERROR",
+        },
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
-  logger.error('Unknown error type', new Error('Unknown error'), { error });
+  logger.error("Unknown error type", new Error("Unknown error"), {
+    originalError: error,
+  });
   return NextResponse.json(
     {
       error: {
-        message: 'An unexpected error occurred',
-        code: 'INTERNAL_ERROR'
-      }
+        message: "An unexpected error occurred",
+        code: "INTERNAL_ERROR",
+      },
     },
-    { status: 500 }
+    { status: 500 },
   );
-} 
+}

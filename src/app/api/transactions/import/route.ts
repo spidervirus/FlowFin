@@ -19,7 +19,11 @@ export async function POST(request: NextRequest) {
     const requestData = await request.json();
     const { transactions, account_id, auto_categorize } = requestData;
 
-    if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
+    if (
+      !transactions ||
+      !Array.isArray(transactions) ||
+      transactions.length === 0
+    ) {
       return NextResponse.json(
         { error: "No transactions provided" },
         { status: 400 },
@@ -42,10 +46,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (accountError || !account) {
-      return NextResponse.json(
-        { error: "Account not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
     // Fetch categories for auto-categorization
@@ -66,8 +67,14 @@ export async function POST(request: NextRequest) {
     // Process transactions
     const processedTransactions = transactions.map((transaction: any) => {
       // Ensure required fields
-      if (!transaction.date || !transaction.description || transaction.amount === undefined) {
-        throw new Error("Each transaction must have date, description, and amount");
+      if (
+        !transaction.date ||
+        !transaction.description ||
+        transaction.amount === undefined
+      ) {
+        throw new Error(
+          "Each transaction must have date, description, and amount",
+        );
       }
 
       // Auto-categorize if enabled
@@ -78,9 +85,9 @@ export async function POST(request: NextRequest) {
           transaction.amount,
           transaction.type || "expense",
           existingTransactions,
-          categories
+          categories,
         );
-        
+
         if (suggestedCategory) {
           category = suggestedCategory;
         }
@@ -102,27 +109,30 @@ export async function POST(request: NextRequest) {
     });
 
     // Calculate total impact on account balance
-    const totalBalanceChange = processedTransactions.reduce((sum, transaction) => {
-      if (transaction.type === "income") {
-        return sum + transaction.amount;
-      } else if (transaction.type === "expense") {
-        return sum - transaction.amount;
-      }
-      return sum;
-    }, 0);
+    const totalBalanceChange = processedTransactions.reduce(
+      (sum, transaction) => {
+        if (transaction.type === "income") {
+          return sum + transaction.amount;
+        } else if (transaction.type === "expense") {
+          return sum - transaction.amount;
+        }
+        return sum;
+      },
+      0,
+    );
 
     // Insert transactions in batches
     const batchSize = 50;
     let successCount = 0;
     let errorCount = 0;
-    
+
     for (let i = 0; i < processedTransactions.length; i += batchSize) {
       const batch = processedTransactions.slice(i, i + batchSize);
-      
+
       const { error: insertError } = await supabase
         .from("transactions")
         .insert(batch);
-      
+
       if (insertError) {
         console.error("Error importing batch:", insertError);
         errorCount += batch.length;
@@ -133,7 +143,7 @@ export async function POST(request: NextRequest) {
 
     // Update account balance
     const newBalance = account.balance + totalBalanceChange;
-    
+
     const { error: updateError } = await supabase
       .from("accounts")
       .update({
@@ -145,10 +155,10 @@ export async function POST(request: NextRequest) {
 
     if (updateError) {
       return NextResponse.json(
-        { 
+        {
           error: "Failed to update account balance",
           successCount,
-          errorCount 
+          errorCount,
         },
         { status: 500 },
       );
@@ -167,4 +177,4 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
-} 
+}

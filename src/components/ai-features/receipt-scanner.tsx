@@ -1,30 +1,30 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { 
-  Camera, 
-  Upload, 
-  FileText, 
-  Check, 
-  AlertCircle, 
+import {
+  Camera,
+  Upload,
+  FileText,
+  Check,
+  AlertCircle,
   RefreshCw,
   Receipt,
   Scan,
-  File
+  File,
 } from "lucide-react";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -57,7 +57,8 @@ export default function ReceiptScanner({ currency }: ReceiptScannerProps) {
     return new Intl.NumberFormat(CURRENCY_CONFIG[currency].locale, {
       style: "currency",
       currency,
-      minimumFractionDigits: CURRENCY_CONFIG[currency].minimumFractionDigits ?? 2,
+      minimumFractionDigits:
+        CURRENCY_CONFIG[currency].minimumFractionDigits ?? 2,
       maximumFractionDigits: 2,
     }).format(amount);
   };
@@ -79,10 +80,12 @@ export default function ReceiptScanner({ currency }: ReceiptScannerProps) {
           <Receipt className="h-16 w-16 text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium mb-2">Coming Soon!</h3>
           <p className="text-sm text-muted-foreground max-w-sm">
-            We're working on bringing you an intelligent receipt scanner that will automatically extract transaction data from your receipts. Stay tuned!
+            We're working on bringing you an intelligent receipt scanner that
+            will automatically extract transaction data from your receipts. Stay
+            tuned!
           </p>
         </div>
       </CardContent>
     </Card>
   );
-} 
+}

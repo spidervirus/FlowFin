@@ -1,6 +1,7 @@
-import { MonthlyTrendsData, CompanySettings } from '@/hooks/useBudgetingData';
-import { Card, CardContent } from '@/components/ui/card';
-import { CURRENCY_CONFIG } from '@/lib/utils';
+import type { MonthlyTrendsData } from "@/types/budgeting";
+import type { CompanySettings } from "@/types/financial";
+import { Card, CardContent } from "@/components/ui/card";
+import { CurrencyCode, CURRENCY_CONFIG, formatCurrency } from "@/lib/utils";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,10 +12,10 @@ import {
   Title,
   Tooltip,
   Legend,
-  ChartOptions
-} from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+  ChartOptions,
+} from "chart.js";
+import { Line, Bar } from "react-chartjs-2";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Register ChartJS components
 ChartJS.register(
@@ -25,7 +26,7 @@ ChartJS.register(
   BarElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
 );
 
 interface MonthlyTrendsProps {
@@ -34,58 +35,53 @@ interface MonthlyTrendsProps {
 }
 
 export default function MonthlyTrends({ data, settings }: MonthlyTrendsProps) {
-  const currencyCode = settings?.default_currency || 'USD';
-  
+  const currencyCode = (settings?.default_currency || "USD") as CurrencyCode;
+
   // Format currency for chart labels
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat(CURRENCY_CONFIG[currencyCode].locale, {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
+  const formatCurrencyValue = (value: number) => {
+    return formatCurrency(value, currencyCode);
   };
-  
+
   // Chart options
-  const overviewOptions: ChartOptions<'line'> = {
+  const overviewOptions: ChartOptions<"line"> = {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
       y: {
         beginAtZero: true,
         ticks: {
-          callback: function(value: any) {
-            if (typeof value === 'number') {
-              return formatCurrency(value);
+          callback: function (value) {
+            if (typeof value === "number") {
+              return formatCurrencyValue(value);
             }
             return value;
-          }
-        }
-      }
+          },
+        },
+      },
     },
     plugins: {
       legend: {
-        position: 'top' as const,
+        position: "top" as const,
       },
       tooltip: {
         callbacks: {
-          label: function(context: any) {
-            let label = context.dataset.label || '';
+          label: function (context) {
+            let label = context.dataset.label || "";
             if (label) {
-              label += ': ';
+              label += ": ";
             }
             if (context.parsed.y !== null) {
-              label += formatCurrency(context.parsed.y);
+              label += formatCurrencyValue(context.parsed.y);
             }
             return label;
-          }
-        }
-      }
+          },
+        },
+      },
     },
   };
-  
+
   // Category chart options
-  const categoryOptions: ChartOptions<'bar'> = {
+  const categoryOptions: ChartOptions<"bar"> = {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
@@ -93,74 +89,74 @@ export default function MonthlyTrends({ data, settings }: MonthlyTrendsProps) {
         beginAtZero: true,
         stacked: true,
         ticks: {
-          callback: function(value: any) {
-            if (typeof value === 'number') {
-              return formatCurrency(value);
+          callback: function (value) {
+            if (typeof value === "number") {
+              return formatCurrencyValue(value);
             }
             return value;
-          }
-        }
+          },
+        },
       },
       x: {
-        stacked: true
-      }
+        stacked: true,
+      },
     },
     plugins: {
       legend: {
-        position: 'top' as const,
+        position: "top" as const,
       },
       tooltip: {
         callbacks: {
-          label: function(context: any) {
-            let label = context.dataset.label || '';
+          label: function (context) {
+            let label = context.dataset.label || "";
             if (label) {
-              label += ': ';
+              label += ": ";
             }
             if (context.parsed.y !== null) {
-              label += formatCurrency(context.parsed.y);
+              label += formatCurrencyValue(context.parsed.y);
             }
             return label;
-          }
-        }
-      }
+          },
+        },
+      },
     },
   };
-  
+
   // Overview chart data
   const overviewData = {
     labels: data.months,
     datasets: [
       {
-        label: 'Income',
+        label: "Income",
         data: data.income,
-        borderColor: 'rgb(34, 197, 94)',
-        backgroundColor: 'rgba(34, 197, 94, 0.2)',
+        borderColor: "rgb(34, 197, 94)",
+        backgroundColor: "rgba(34, 197, 94, 0.2)",
         tension: 0.2,
       },
       {
-        label: 'Expenses',
+        label: "Expenses",
         data: data.expenses,
-        borderColor: 'rgb(239, 68, 68)',
-        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+        borderColor: "rgb(239, 68, 68)",
+        backgroundColor: "rgba(239, 68, 68, 0.2)",
         tension: 0.2,
       },
       {
-        label: 'Savings',
+        label: "Savings",
         data: data.savings,
-        borderColor: 'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+        borderColor: "rgb(59, 130, 246)",
+        backgroundColor: "rgba(59, 130, 246, 0.2)",
         tension: 0.2,
-      }
+      },
     ],
   };
-  
+
   // Category chart data
   const categoryData = {
     labels: data.months,
     datasets: data.categories.map((category) => ({
       label: category.name,
       data: category.values,
-      backgroundColor: category.color || '#888',
+      backgroundColor: category.color || "#888",
     })),
   };
 
@@ -170,7 +166,7 @@ export default function MonthlyTrends({ data, settings }: MonthlyTrendsProps) {
         <TabsTrigger value="overview">Overview</TabsTrigger>
         <TabsTrigger value="categories">Categories</TabsTrigger>
       </TabsList>
-      
+
       <TabsContent value="overview" className="mt-4">
         <Card>
           <CardContent className="p-4">
@@ -180,7 +176,7 @@ export default function MonthlyTrends({ data, settings }: MonthlyTrendsProps) {
           </CardContent>
         </Card>
       </TabsContent>
-      
+
       <TabsContent value="categories" className="mt-4">
         <Card>
           <CardContent className="p-4">
@@ -192,4 +188,4 @@ export default function MonthlyTrends({ data, settings }: MonthlyTrendsProps) {
       </TabsContent>
     </Tabs>
   );
-} 
+}

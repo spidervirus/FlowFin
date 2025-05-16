@@ -8,88 +8,89 @@ interface UpdateProfileParams {
   email: string;
 }
 
-export async function updateUserProfile({ userId, fullName, email }: UpdateProfileParams) {
+export async function updateUserProfile({
+  userId,
+  fullName,
+  email,
+}: UpdateProfileParams) {
   const serviceClient = createServiceRoleClient();
-  
+
   try {
-    // First try updating the main users table
-    const { data: mainData, error: mainError } = await serviceClient
-      .from('users')
+    // First try updating the profiles table
+    const { data: profileData, error: profileError } = await serviceClient
+      .from("profiles")
       .update({
         full_name: fullName,
-        name: fullName,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
-      .eq('id', userId);
-      
-    if (mainError && mainError.code !== 'PGRST116') {
-      console.error('Error updating main profile:', mainError);
-      
-      // If not found in main, try updating backup
+      .eq("id", userId);
+
+    if (profileError && profileError.code !== "PGRST116") {
+      console.error("Error updating profile:", profileError);
+
+      // If not found in profiles, try updating backup
       const { data: backupData, error: backupError } = await serviceClient
-        .from('user_profiles_backup')
+        .from("user_profiles_backup")
         .update({
           full_name: fullName,
           name: fullName,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', userId);
-        
+        .eq("id", userId);
+
       if (backupError) {
-        console.error('Error updating backup profile:', backupError);
+        console.error("Error updating backup profile:", backupError);
         return {
           success: false,
-          message: backupError.message
+          message: backupError.message,
         };
       }
     }
-    
+
     // Try updating user metadata in auth system
     try {
-      const { error: metadataError } = await serviceClient.auth.admin.updateUserById(
-        userId,
-        {
-          user_metadata: { full_name: fullName }
-        }
-      );
-      
+      const { error: metadataError } =
+        await serviceClient.auth.admin.updateUserById(userId, {
+          user_metadata: { full_name: fullName },
+        });
+
       if (metadataError) {
-        console.error('Error updating user metadata:', metadataError);
+        console.error("Error updating user metadata:", metadataError);
         // Continue anyway as the profile was updated
       }
     } catch (metadataError) {
-      console.error('Exception updating user metadata:', metadataError);
+      console.error("Exception updating user metadata:", metadataError);
       // Continue anyway as the profile was updated
     }
-    
+
     // Try updating manual registry if it exists
     try {
       const { error: manualError } = await serviceClient
-        .from('manual_user_registry')
+        .from("manual_user_registry")
         .update({
           full_name: fullName,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', userId);
-        
-      if (manualError && manualError.code !== 'PGRST116') {
-        console.error('Error updating manual registry:', manualError);
+        .eq("id", userId);
+
+      if (manualError && manualError.code !== "PGRST116") {
+        console.error("Error updating manual registry:", manualError);
         // Continue anyway as the profile was updated in other tables
       }
     } catch (manualError) {
-      console.error('Exception updating manual registry:', manualError);
+      console.error("Exception updating manual registry:", manualError);
       // Continue anyway as the profile was updated in other tables
     }
-    
+
     return {
       success: true,
-      message: "Profile updated successfully"
+      message: "Profile updated successfully",
     };
   } catch (error) {
-    console.error('Exception updating profile:', error);
+    console.error("Exception updating profile:", error);
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Unknown error"
+      message: error instanceof Error ? error.message : "Unknown error",
     };
   }
-} 
+}

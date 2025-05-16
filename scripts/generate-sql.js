@@ -1,22 +1,28 @@
 // Script to generate a SQL file that can be run in the Supabase dashboard
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 function generateSql() {
-  console.log('Generating SQL file...');
-  
+  console.log("Generating SQL file...");
+
   // Read the financial tables migration file
   const financialTablesSql = fs.readFileSync(
-    path.join(__dirname, '../supabase/migrations/20240702000001_create_financial_tables.sql'),
-    'utf8'
+    path.join(
+      __dirname,
+      "../supabase/migrations/20240702000001_create_financial_tables.sql",
+    ),
+    "utf8",
   );
-  
+
   // Read the invoices table migration file
   const invoicesTableSql = fs.readFileSync(
-    path.join(__dirname, '../supabase/migrations/20240703000001_create_invoices_table.sql'),
-    'utf8'
+    path.join(
+      __dirname,
+      "../supabase/migrations/20240703000001_create_invoices_table.sql",
+    ),
+    "utf8",
   );
-  
+
   // Generate the SQL file
   const sql = `
 -- This SQL file was generated to create the necessary tables for the FlowFin application
@@ -73,12 +79,15 @@ VALUES (
 );
 */
 `;
-  
+
   // Write the SQL file
-  const outputPath = path.join(__dirname, '../supabase/migrations/combined-migrations.sql');
+  const outputPath = path.join(
+    __dirname,
+    "../supabase/migrations/combined-migrations.sql",
+  );
   fs.writeFileSync(outputPath, sql);
-  
+
   console.log(`SQL file generated at: ${outputPath}`);
 }
 
-generateSql(); 
+generateSql();
