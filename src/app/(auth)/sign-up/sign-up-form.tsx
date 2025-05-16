@@ -17,7 +17,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
+  FormMessage as ShadcnFormMessage,
 } from "@/components/ui/form";
 
 // Define validation schema with zod
@@ -115,7 +115,7 @@ export function SignUpForm({ searchParams }: { searchParams: Message }) {
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage />
+                    <ShadcnFormMessage />
                   </FormItem>
                 )}
               />
@@ -135,7 +135,7 @@ export function SignUpForm({ searchParams }: { searchParams: Message }) {
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage />
+                    <ShadcnFormMessage />
                   </FormItem>
                 )}
               />
@@ -169,7 +169,7 @@ export function SignUpForm({ searchParams }: { searchParams: Message }) {
                         </button>
                       </div>
                     </FormControl>
-                    <FormMessage />
+                    <ShadcnFormMessage />
                   </FormItem>
                 )}
               />
@@ -203,7 +203,7 @@ export function SignUpForm({ searchParams }: { searchParams: Message }) {
                         </button>
                       </div>
                     </FormControl>
-                    <FormMessage />
+                    <ShadcnFormMessage />
                   </FormItem>
                 )}
               />

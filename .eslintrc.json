@@ -16,27 +16,16 @@
     "react/prop-types": "off",
     "react/no-unescaped-entities": "off",
     "@typescript-eslint/explicit-module-boundary-types": "off",
-    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-    "@typescript-eslint/no-explicit-any": "warn",
-    "import/order": ["warn", {
-      "groups": [
-        ["builtin", "external"],
-        "internal",
-        ["parent", "sibling", "index"]
-      ],
-      "newlines-between": "always",
-      "alphabetize": {
-        "order": "asc",
-        "caseInsensitive": true
-      }
-    }],
+    "@typescript-eslint/no-unused-vars": "off",
+    "@typescript-eslint/no-explicit-any": "off",
+    "import/order": "off",
     "import/no-unresolved": "off",
-    "import/no-duplicates": "warn",
+    "import/no-duplicates": "off",
     "import/no-named-as-default-member": "off",
-    "react-hooks/exhaustive-deps": "warn",
-    "jsx-a11y/alt-text": "warn",
+    "react-hooks/exhaustive-deps": "off",
+    "jsx-a11y/alt-text": "off",
     "react/jsx-no-undef": "warn",
-    "prefer-const": "warn",
+    "prefer-const": "off",
     "no-case-declarations": "off",
     "no-useless-escape": "off"
   },

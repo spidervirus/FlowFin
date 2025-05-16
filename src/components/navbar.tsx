@@ -36,23 +36,36 @@ export default function Navbar() {
     };
   }, []);
 
+  // Add margin to the page content to account for fixed navbar
+  // This hook is now called unconditionally at the top level
+  useEffect(() => {
+    // Only apply padding if not on a dashboard route
+    if (!pathname?.startsWith('/dashboard')) {
+      if (typeof document !== 'undefined') {
+        document.body.style.paddingTop = '60px';
+      }
+      return () => {
+        if (typeof document !== 'undefined') {
+          document.body.style.paddingTop = '0';
+        }
+      };
+    }
+    // If it is a dashboard route, ensure padding is 0 or as managed by DashboardNavbar
+    // This cleanup might be redundant if DashboardNavbar doesn't affect paddingTop, 
+    // but ensures this effect cleans up properly if the route changes away from non-dashboard.
+    return () => {
+        if (typeof document !== 'undefined') {
+            document.body.style.paddingTop = '0';
+        }
+    };
+  }, [pathname]); // Add pathname as a dependency
+
   // If we're on a dashboard route, render the dashboard navbar
+  // This condition is now after all top-level hooks
   if (pathname?.startsWith('/dashboard')) {
     return <DashboardNavbar />;
   }
   
-  // Add margin to the page content to account for fixed navbar
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      document.body.style.paddingTop = '60px';
-    }
-    return () => {
-      if (typeof document !== 'undefined') {
-        document.body.style.paddingTop = '0';
-      }
-    };
-  }, []);
-
   return (
     <nav className="w-full border-b border-gray-200 bg-white py-4 fixed top-0 left-0 right-0 z-[100]">
       {authError && (

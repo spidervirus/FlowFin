@@ -54,7 +54,7 @@ export default function NewAccountPage() {
         if (error) throw error;
 
         if (settings?.default_currency) {
-          setCurrencies([settings.default_currency]);
+          setCurrencies([settings.default_currency as CurrencyCode]);
         }
       } catch (error) {
         toast.error("Error fetching currencies");

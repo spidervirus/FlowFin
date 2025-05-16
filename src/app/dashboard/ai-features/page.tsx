@@ -57,10 +57,15 @@ export default function AIFeaturesPage() {
         }
 
         if (!isMounted) return;
-        setSettings(settingsData);
-        if (settingsData?.default_currency) {
-          setCurrency(settingsData.default_currency as CurrencyCode);
+
+        // Transform settingsData to match the local CompanySettings interface
+        let currencyToSet: CurrencyCode = "USD"; // Default fallback
+        if (settingsData?.default_currency && ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "CNY", "INR"].includes(settingsData.default_currency.toUpperCase())) {
+          currencyToSet = settingsData.default_currency.toUpperCase() as CurrencyCode;
         }
+        
+        setSettings({ default_currency: currencyToSet });
+        setCurrency(currencyToSet); // Also update the separate currency state
 
     // Set up real-time subscription for settings updates
         settingsSubscription = supabaseClient

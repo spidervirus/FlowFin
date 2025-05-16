@@ -1,6 +1,6 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
 import { 
@@ -58,7 +58,7 @@ async function signInHandler(request: NextRequest) {
     // Validate request body using our schema
     const validation = await validateBody(request, signInSchema);
     if (!validation.success) {
-      return validation.error;
+      return (validation as { success: false; error: NextResponse<unknown> }).error;
     }
     
     const { email, password } = validation.data;

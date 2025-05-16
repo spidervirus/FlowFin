@@ -84,9 +84,23 @@ export default function AccountsPage() {
       }
 
       if (settings) {
-        setCompanySettings(settings);
-        if (settings.default_currency) {
-          setCurrency(settings.default_currency);
+        // Construct transformedSettings strictly based on the known CompanySettings type
+        const transformedSettings: CompanySettings = {
+          id: settings.id, 
+          user_id: settings.user_id,
+          company_name: settings.company_name ?? undefined,
+          default_currency: (settings.default_currency && ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "CNY", "INR"].includes(settings.default_currency.toUpperCase())) 
+                            ? settings.default_currency.toUpperCase() as CurrencyCode 
+                            : "USD" as CurrencyCode, // Fallback to USD if invalid or null
+          country: (settings as any).country ?? undefined, // Accessing potentially untyped 'country' from settings
+          fiscal_year_start: settings.fiscal_year_start ?? undefined,
+          created_at: settings.created_at ?? '', 
+          updated_at: settings.updated_at ?? '', 
+          // Removed fields not present in the CompanySettings type (address, company_size, etc.)
+        };
+        setCompanySettings(transformedSettings);
+        if (transformedSettings.default_currency) {
+          setCurrency(transformedSettings.default_currency); // default_currency is already CurrencyCode here
         }
       } else {
         setCurrency("USD");

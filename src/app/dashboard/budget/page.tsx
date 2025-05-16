@@ -44,6 +44,33 @@ interface MinimalUser {
   email?: string;
 }
 
+// Define the expected shape of the category data fetched via join
+interface FetchedCategory {
+  id: string;
+  name: string;
+  type: string; // Consider using a more specific type if available (e.g., Category['type'])
+  color: string | null;
+}
+
+// Define the expected shape of the budget data fetched from Supabase
+interface FetchedBudget {
+  // All direct columns from the 'budgets' table
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string | null;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+  is_recurring?: boolean | null;
+  recurrence_period?: "daily" | "weekly" | "monthly" | "yearly" | null;
+  created_at: string;
+  category_id?: string | null; // Implied by the select query
+  // Add any other direct columns from your 'budgets' table here if they are selected by '*'
+
+  category: FetchedCategory | null; // The joined category data
+}
+
 export default function BudgetPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -200,11 +227,13 @@ export default function BudgetPage() {
         // Fetch budgets from the database
         console.log("Fetching budgets for user ID:", effectiveUser.id);
 
-        const { data: budgetsData, error } = await supabase
+        // Use the FetchedBudget type for the Supabase query result
+        const { data: fetchedBudgetsData, error } = await supabase
           .from("budgets")
           .select("*, category:category_id(id, name, type, color)")
           .eq("user_id", effectiveUser.id)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .returns<FetchedBudget[]>();
 
         if (error) {
           console.error("Error fetching budgets:", error);
@@ -212,13 +241,52 @@ export default function BudgetPage() {
         }
 
         console.log(
-          `Fetched ${budgetsData?.length || 0} budgets for user ${effectiveUser.id}:`,
-          budgetsData,
+          `Fetched ${fetchedBudgetsData?.length || 0} budgets for user ${effectiveUser.id}:`,
+          fetchedBudgetsData,
         );
 
-        if (budgetsData && budgetsData.length > 0) {
-          console.log("Setting budgets state with data:", budgetsData);
-          setBudgets(budgetsData as unknown as Budget[]);
+        if (fetchedBudgetsData && fetchedBudgetsData.length > 0) {
+          // Transform FetchedBudget[] to Budget[]
+          // This transformation depends on how 'category' in FetchedBudget relates to 'budget_categories' in Budget
+          // For now, we'll assume a simplified transformation.
+          // You'll likely need to adjust this based on your actual data structures and needs.
+          const transformedBudgets: Budget[] = fetchedBudgetsData.map((fb: FetchedBudget) => ({
+            id: fb.id,
+            user_id: fb.user_id,
+            name: fb.name,
+            description: fb.description ?? undefined,
+            start_date: fb.start_date,
+            end_date: fb.end_date,
+            is_active: fb.is_active,
+            is_recurring: fb.is_recurring ?? undefined,
+            recurrence_period: fb.recurrence_period ?? undefined,
+            created_at: fb.created_at,
+            // The 'category' from the join is different from 'budget_categories' which is an array.
+            // This part needs careful consideration.
+            // If your 'Budget' type *must* have budget_categories, you'll need to fetch them separately
+            // or adjust the 'Budget' type or this transformation.
+            // For now, initializing budget_categories as an empty array if not directly available.
+            budget_categories: fb.category ? [{
+              id: fb.category.id, // This might not be the BudgetCategory id
+              budget_id: fb.id,
+              user_id: fb.user_id,
+              category_id: fb.category.id,
+              amount: 0, // Placeholder, amount would come from budget_categories table
+              category: { // Transforming FetchedCategory to Category
+                id: fb.category.id,
+                name: fb.category.name,
+                type: fb.category.type as Category['type'], // Cast to be sure
+                color: fb.category.color,
+                // Assuming other Category fields are not strictly needed here or are nullable in Category type
+                user_id: fb.user_id, // Placeholder, category might have its own user_id or none
+                created_at: '', // Placeholder
+                parent_id: null // Placeholder
+              } as Category, // Cast the whole object to Category
+            }] : [],
+            budget_tracking: [], // Placeholder, fetch or compute separately
+          }));
+          console.log("Setting budgets state with transformed data:", transformedBudgets);
+          setBudgets(transformedBudgets);
         } else {
           console.log("No budgets found, setting empty array");
           setBudgets([]);

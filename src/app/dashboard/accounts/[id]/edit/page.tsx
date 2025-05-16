@@ -52,6 +52,9 @@ export default function EditAccountPage({
       const transformedAccount: Account = {
         ...accountData,
         currency: accountData.currency as CurrencyCode,
+        type: accountData.type as Account['type'],
+        created_at: accountData.created_at ?? '',
+        updated_at: accountData.updated_at ?? '',
       };
 
       setAccount(transformedAccount);
@@ -69,7 +72,7 @@ export default function EditAccountPage({
       }
 
       if (settings?.default_currency) {
-        setCurrencies([settings.default_currency]);
+        setCurrencies([settings.default_currency as CurrencyCode]);
       }
     } catch (error) {
       toast.error("Error fetching data");
@@ -114,7 +117,7 @@ export default function EditAccountPage({
 
         <Card>
           <CardContent className="pt-6">
-            <BankAccountForm initialData={account} currencies={currencies} />
+            <BankAccountForm initialData={account} currencies={currencies} isEditMode={true} />
           </CardContent>
         </Card>
       </div>
