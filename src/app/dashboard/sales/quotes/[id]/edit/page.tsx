@@ -134,9 +134,9 @@ export default function EditQuotePage({ params }: EditQuotePageProps) {
       />
       <div className="space-y-6">
         <QuoteForm
-          initialData={quote}
+          defaultValues={quote}
           onSubmit={handleSubmit}
-          isLoading={isLoading}
+          isSubmitting={isLoading}
         />
       </div>
     </DashboardWrapper>

@@ -25,6 +25,8 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Download } from "lucide-react";
 import Link from "next/link";
 import { type Employee, type PayrollPeriod, type PayslipItem, type CompanySettings, type Payslip } from "@/app/types/payroll";
+import { type Database } from "@/types/supabase";
+import { CurrencyCode } from "@/lib/utils";
 
 export default function PayslipPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -58,8 +60,26 @@ export default function PayslipPage({ params }: { params: { id: string } }) {
 
         if (settingsError) {
           console.error("Error fetching company settings:", settingsError);
+          setSettings(null);
+        } else if (settingsData) {
+          const transformedSettings: CompanySettings = {
+            id: settingsData.id,
+            user_id: settingsData.user_id,
+            company_name: settingsData.company_name ?? "N/A",
+            address: (settingsData as any).address ?? "Default Address",
+            default_currency: (settingsData.default_currency as CurrencyCode) ?? "USD",
+            fiscal_year_start: settingsData.fiscal_year_start ?? "01-01",
+            industry: (settingsData as any).industry ?? "General",
+            phone_number: (settingsData as any).phone_number ?? "N/A",
+            company_size: (settingsData as any).company_size ?? "1-10",
+            created_at: settingsData.created_at,
+            updated_at: settingsData.updated_at,
+            organization_id: (settingsData as any).organization_id ?? "MISSING_ORG_ID",
+            tax_year_start: (settingsData as any).tax_year_start ?? "01-01",
+          };
+          setSettings(transformedSettings);
         } else {
-          setSettings(settingsData);
+          setSettings(null);
         }
 
         // Fetch payslip
@@ -72,7 +92,26 @@ export default function PayslipPage({ params }: { params: { id: string } }) {
 
         if (payslipError) throw payslipError;
 
-        setPayslip(payslipData);
+        const validPayslipStatuses = ["draft", "approved", "paid"] as const;
+        type ValidPayslipStatus = typeof validPayslipStatuses[number];
+        const transformedPayslip: Payslip = {
+          id: payslipData.id,
+          user_id: payslipData.user_id,
+          employee_id: payslipData.employee_id,
+          pay_run_id: payslipData.pay_run_id,
+          gross_pay: payslipData.gross_pay,
+          deductions: payslipData.deductions,
+          net_pay: payslipData.net_pay,
+          status: validPayslipStatuses.includes(payslipData.status as any) 
+              ? (payslipData.status as ValidPayslipStatus) 
+              : "draft",
+          payment_date: payslipData.payment_date,
+          created_at: payslipData.created_at,
+          updated_at: payslipData.updated_at,
+          period_start: payslipData.period_start,
+          period_end: payslipData.period_end,
+        };
+        setPayslip(transformedPayslip);
 
         // Fetch employee
         const { data: employeeData, error: employeeError } = await supabase
@@ -84,19 +123,50 @@ export default function PayslipPage({ params }: { params: { id: string } }) {
 
         if (employeeError) throw employeeError;
 
-        setEmployee(employeeData);
+        const validEmployeeStatuses = ["active", "inactive"] as const;
+        type ValidEmployeeStatus = typeof validEmployeeStatuses[number];
+        const transformedEmployee: Employee = {
+          id: employeeData.id,
+          user_id: employeeData.user_id,
+          first_name: employeeData.first_name ?? "",
+          last_name: employeeData.last_name ?? "",
+          email: employeeData.email ?? "",
+          hire_date: employeeData.hire_date ?? new Date().toISOString(),
+          salary: employeeData.salary ?? 0,
+          status: validEmployeeStatuses.includes(employeeData.status as any) 
+              ? (employeeData.status as ValidEmployeeStatus) 
+              : "inactive",
+          department: employeeData.department ?? "",
+          position: employeeData.position ?? "",
+          created_at: employeeData.created_at,
+          updated_at: employeeData.updated_at,
+        };
+        setEmployee(transformedEmployee);
 
         // Fetch payroll period
         const { data: periodData, error: periodError } = await supabase
           .from("payroll_periods")
           .select("*")
-          .eq("id", payslipData.payroll_period_id)
+          .eq("id", payslipData.pay_run_id)
           .eq("user_id", user.id)
           .single();
 
         if (periodError) throw periodError;
 
-        setPeriod(periodData);
+        const validPeriodStatuses = ["draft", "processing", "completed", "cancelled"] as const;
+        type ValidPeriodStatus = typeof validPeriodStatuses[number];
+        const transformedPeriod: PayrollPeriod = {
+          id: periodData.id,
+          user_id: periodData.user_id,
+          start_date: periodData.start_date,
+          end_date: periodData.end_date,
+          status: validPeriodStatuses.includes(periodData.status as any) 
+              ? (periodData.status as ValidPeriodStatus) 
+              : "draft",
+          created_at: periodData.created_at,
+          updated_at: periodData.updated_at,
+        };
+        setPeriod(transformedPeriod);
 
         // Fetch payslip items
         const { data: itemsData, error: itemsError } = await supabase
@@ -107,7 +177,21 @@ export default function PayslipPage({ params }: { params: { id: string } }) {
 
         if (itemsError) throw itemsError;
 
-        setItems(itemsData || []);
+        const validItemTypes = ["deduction", "earning"] as const;
+        type ValidItemType = typeof validItemTypes[number];
+        const transformedItems: PayslipItem[] = (itemsData || []).map((item: any) => ({
+          id: item.id,
+          user_id: item.user_id,
+          payslip_id: item.payslip_id,
+          type: validItemTypes.includes(item.type as any) 
+              ? (item.type as ValidItemType) 
+              : "earning",
+          description: item.description ?? "",
+          amount: item.amount ?? 0,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+        }));
+        setItems(transformedItems);
       } catch (error) {
         console.error("Error:", error);
         toast.error("Error loading payslip");
@@ -277,7 +361,7 @@ export default function PayslipPage({ params }: { params: { id: string } }) {
                         <Badge variant="outline">Earning</Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        {formatAmount(payslip.base_salary)}
+                        {formatAmount(payslip.gross_pay)}
                       </TableCell>
                     </TableRow>
                     {items.map((item) => (

@@ -24,7 +24,7 @@ interface CompanySettings {
   company_name: string;
   default_currency: string;
   address?: string;
-  country: string;
+  country?: string;
   fiscal_year_start: string;
   industry?: string;
   created_at: string;
@@ -99,8 +99,23 @@ export default function ManualJournalsPage() {
 
         if (settingsError) {
           console.error("Error fetching company settings:", settingsError);
+          setSettings(null);
+        } else if (settingsData) {
+          const transformedSettings: CompanySettings = {
+            id: settingsData.id,
+            user_id: settingsData.user_id,
+            company_name: settingsData.company_name ?? "N/A",
+            default_currency: settingsData.default_currency ?? "USD",
+            address: (settingsData as any).address ?? undefined,
+            country: (settingsData as any).country ?? undefined,
+            fiscal_year_start: settingsData.fiscal_year_start ?? "",
+            industry: (settingsData as any).industry ?? undefined,
+            created_at: settingsData.created_at ?? "",
+            updated_at: settingsData.updated_at ?? "",
+          };
+          setSettings(transformedSettings);
         } else {
-          setSettings(settingsData);
+          setSettings(null);
         }
 
         // Fetch journals with their entries
@@ -127,8 +142,8 @@ export default function ManualJournalsPage() {
         if (error) throw error;
 
         // Transform the data to match the JournalEntry interface
-        const transformedJournals: JournalEntry[] = (data as RawJournalData[]).map(
-          (journal) => ({
+        const transformedJournals: JournalEntry[] = (data || []).map(
+          (journal: any) => ({
             id: journal.id,
             user_id: journal.user_id,
             date: journal.date,
@@ -137,7 +152,7 @@ export default function ManualJournalsPage() {
             status: journal.status,
             created_at: journal.created_at,
             updated_at: journal.updated_at,
-            entries: journal.entries.map((entry) => ({
+            entries: (journal.entries || []).map((entry: any) => ({
               account_id: entry.account_id,
               description: entry.description || "",
               debit: Number(entry.debit_amount) || 0,

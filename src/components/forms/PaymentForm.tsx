@@ -63,15 +63,16 @@ export function PaymentForm({
     const fetchInvoiceCurrency = async () => {
       if (!invoiceId) return;
       try {
-        const { data: invoice, error } = await supabase
+        const { data: invoiceData, error: fetchInvoiceError } = await supabase
           .from("invoices")
-          .select("currency_code")
+          .select("currency")
           .eq("id", invoiceId)
           .single();
 
-        if (error) throw error;
-        if (invoice?.currency_code) {
-          setDefaultCurrency(invoice.currency_code as CurrencyCode);
+        if (fetchInvoiceError && fetchInvoiceError.code !== 'PGRST116') {
+          console.error("Error fetching invoice currency details:", fetchInvoiceError);
+        } else if (invoiceData && 'currency' in invoiceData && invoiceData.currency) {
+          setDefaultCurrency(invoiceData.currency as CurrencyCode);
         }
       } catch (error) {
         console.error("Error fetching invoice currency:", error);
@@ -106,15 +107,28 @@ export function PaymentForm({
         throw new Error("Not authenticated");
       }
 
+      const paymentDataToInsert: {
+        invoice_id: string;
+        payment_date: string;
+        amount: number;
+        payment_method: string;
+        notes?: string | null;
+        transaction_id?: string | null;
+        user_id: string;
+      } = {
+        invoice_id: data.invoice_id,
+        payment_date: data.payment_date,
+        amount: Number(data.amount) || 0,
+        payment_method: data.payment_method,
+        notes: data.notes || null,
+        transaction_id: data.transaction_id || null,
+        user_id: user.id,
+      };
+
       // Insert payment record
       const { data: payment, error: paymentError } = await supabase
         .from("invoice_payments")
-        .insert([
-          {
-            ...data,
-            user_id: user.id,
-          },
-        ])
+        .insert([paymentDataToInsert])
         .select()
         .single();
 

@@ -48,7 +48,34 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
           router.push("/dashboard/sales/customers");
           return;
         }
-        setCustomerData(data as Customer); // Cast to Customer
+        // Explicitly map fetched data to the Customer type
+        // Assuming 'company_name' from the fetched data should be mapped to 'name'
+        // and other fields match or are handled (e.g. nullable fields)
+        const customer: Partial<Customer> = {
+          id: data.id,
+          user_id: data.user_id,
+          name: data.company_name || "Unnamed Customer", // Rely on company_name or fallback
+          email: data.email,
+          phone: data.phone,
+          billing_address_line1: data.billing_address_line1,
+          billing_address_line2: data.billing_address_line2,
+          billing_city: data.billing_city,
+          billing_state_province: data.billing_state_province,
+          billing_postal_code: data.billing_postal_code,
+          billing_country: data.billing_country,
+          shipping_address_line1: data.shipping_address_line1,
+          shipping_address_line2: data.shipping_address_line2,
+          shipping_city: data.shipping_city,
+          shipping_state_province: data.shipping_state_province,
+          shipping_postal_code: data.shipping_postal_code,
+          shipping_country: data.shipping_country,
+          tax_id: data.tax_id,
+          notes: data.notes,
+          is_active: data.is_active === undefined ? true : data.is_active, // Default to true if undefined
+          created_at: data.created_at,
+          updated_at: data.updated_at,
+        };
+        setCustomerData(customer);
       } catch (err) {
         console.error("Error fetching customer:", err);
         toast.error("An unexpected error occurred while fetching customer details.");

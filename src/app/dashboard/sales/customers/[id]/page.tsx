@@ -61,7 +61,7 @@ export default function CustomerDetailsPage() {
 
       const { data: customerData, error: customerError } = await supabase
         .from("customers")
-        .select("*, user_id(*)")
+        .select("*")
         .eq("id", params.id as string)
         .eq("user_id", user.id)
         .single();
@@ -77,7 +77,31 @@ export default function CustomerDetailsPage() {
         router.push("/dashboard/sales/customers");
         return;
       }
-      setCustomer(customerData as Customer);
+      const typedCustomer: Customer = {
+        id: customerData.id,
+        user_id: customerData.user_id,
+        name: customerData.company_name || "Unnamed Customer",
+        email: customerData.email,
+        phone: customerData.phone,
+        billing_address_line1: customerData.billing_address_line1,
+        billing_address_line2: customerData.billing_address_line2,
+        billing_city: customerData.billing_city,
+        billing_state_province: customerData.billing_state_province,
+        billing_postal_code: customerData.billing_postal_code,
+        billing_country: customerData.billing_country,
+        shipping_address_line1: customerData.shipping_address_line1,
+        shipping_address_line2: customerData.shipping_address_line2,
+        shipping_city: customerData.shipping_city,
+        shipping_state_province: customerData.shipping_state_province,
+        shipping_postal_code: customerData.shipping_postal_code,
+        shipping_country: customerData.shipping_country,
+        tax_id: customerData.tax_id,
+        notes: customerData.notes,
+        is_active: customerData.is_active === undefined ? true : customerData.is_active,
+        created_at: customerData.created_at,
+        updated_at: customerData.updated_at,
+      };
+      setCustomer(typedCustomer);
 
       // Fetch customer transactions - COMMENTED OUT FOR NOW
       /*

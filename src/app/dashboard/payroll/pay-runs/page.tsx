@@ -62,6 +62,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Database } from "@/types/supabase";
 import { type Employee, type PayrollSettings, type CompanySettings, type PayRun, type PayRunSummary, type NewPayRun } from "@/app/types/payroll";
+import { CurrencyCode } from "@/lib/utils";
 
 export default function PayRunsPage() {
   const router = useRouter();
@@ -123,10 +124,11 @@ export default function PayRunsPage() {
               user_id: user.id,
               company_name: "My Company",
               address: "",
-              country: "United States",
               default_currency: "USD",
-              fiscal_year_start: "01",
+              fiscal_year_start: "01-01",
               industry: "Technology",
+              organization_id: "default-org-id",
+              tax_year_start: "01-01",
             })
             .select()
             .single();
@@ -136,9 +138,39 @@ export default function PayRunsPage() {
           toast.error("Failed to create company settings");
           return;
         }
-        setCompanySettings(newCompanySettings);
+        const transformedNewCompanySettings: CompanySettings = {
+            id: newCompanySettings.id,
+            user_id: newCompanySettings.user_id,
+            company_name: newCompanySettings.company_name ?? "My Company",
+            address: (newCompanySettings as any).address ?? "",
+            default_currency: ((newCompanySettings as any).default_currency as CurrencyCode) ?? "USD",
+            fiscal_year_start: (newCompanySettings as any).fiscal_year_start ?? "01-01",
+            industry: (newCompanySettings as any).industry ?? "Technology",
+            phone_number: (newCompanySettings as any).phone_number ?? "N/A",
+            company_size: (newCompanySettings as any).company_size ?? "1-10",
+            created_at: newCompanySettings.created_at,
+            updated_at: newCompanySettings.updated_at,
+            organization_id: (newCompanySettings as any).organization_id ?? "MISSING_ORG_ID",
+            tax_year_start: (newCompanySettings as any).tax_year_start ?? "01-01",
+        };
+        setCompanySettings(transformedNewCompanySettings);
       } else {
-        setCompanySettings(companySettingsData);
+        const transformedExistingCompanySettings: CompanySettings = {
+            id: companySettingsData.id,
+            user_id: companySettingsData.user_id,
+            company_name: companySettingsData.company_name ?? "My Company",
+            address: (companySettingsData as any).address ?? "",
+            default_currency: ((companySettingsData as any).default_currency as CurrencyCode) ?? "USD",
+            fiscal_year_start: (companySettingsData as any).fiscal_year_start ?? "01-01",
+            industry: (companySettingsData as any).industry ?? "Technology",
+            phone_number: (companySettingsData as any).phone_number ?? "N/A",
+            company_size: (companySettingsData as any).company_size ?? "1-10",
+            created_at: companySettingsData.created_at,
+            updated_at: companySettingsData.updated_at,
+            organization_id: (companySettingsData as any).organization_id ?? "MISSING_ORG_ID",
+            tax_year_start: (companySettingsData as any).tax_year_start ?? "01-01",
+        };
+        setCompanySettings(transformedExistingCompanySettings);
       }
 
       // Fetch payroll settings
@@ -178,9 +210,59 @@ export default function PayRunsPage() {
           toast.error("Failed to create payroll settings");
           return;
         }
-        setPayrollSettings(newSettings as PayrollSettings);
+        const transformedNewPayrollSettings: PayrollSettings = {
+            ...(newSettings as any),
+            id: newSettings.id,
+            user_id: newSettings.user_id,
+            pay_schedule: (newSettings as any).pay_schedule ?? "monthly",
+            pay_day: (newSettings as any).pay_day ?? "last",
+            overtime_rate: (newSettings as any).overtime_rate ?? 1.5,
+            tax_rate: (newSettings as any).tax_rate ?? 20.0,
+            enable_overtime: (newSettings as any).enable_overtime ?? true,
+            enable_bonuses: (newSettings as any).enable_bonuses ?? true,
+            enable_deductions: (newSettings as any).enable_deductions ?? true,
+            default_work_hours: (newSettings as any).default_work_hours ?? 40,
+            holiday_pay_rate: (newSettings as any).holiday_pay_rate ?? 1.0,
+            sick_leave_accrual_rate: (newSettings as any).sick_leave_accrual_rate ?? 0,
+            vacation_leave_accrual_rate: (newSettings as any).vacation_leave_accrual_rate ?? 0,
+            enable_holiday_pay: (newSettings as any).enable_holiday_pay ?? false,
+            enable_sick_leave: (newSettings as any).enable_sick_leave ?? false,
+            enable_vacation_leave: (newSettings as any).enable_vacation_leave ?? false,
+            enable_401k: (newSettings as any).enable_401k ?? false,
+            default_401k_contribution: (newSettings as any).default_401k_contribution ?? 0,
+            enable_health_insurance: (newSettings as any).enable_health_insurance ?? false,
+            default_health_insurance_deduction: (newSettings as any).default_health_insurance_deduction ?? 0,
+            created_at: newSettings.created_at,
+            updated_at: newSettings.updated_at,
+        };
+        setPayrollSettings(transformedNewPayrollSettings);
       } else {
-        setPayrollSettings(payrollSettingsData as PayrollSettings);
+        const transformedExistingPayrollSettings: PayrollSettings = {
+            ...(payrollSettingsData as any),
+            id: payrollSettingsData.id,
+            user_id: payrollSettingsData.user_id,
+            pay_schedule: (payrollSettingsData as any).pay_schedule ?? "monthly",
+            pay_day: (payrollSettingsData as any).pay_day ?? "last",
+            overtime_rate: (payrollSettingsData as any).overtime_rate ?? 1.5,
+            tax_rate: (payrollSettingsData as any).tax_rate ?? 20.0,
+            enable_overtime: (payrollSettingsData as any).enable_overtime ?? true,
+            enable_bonuses: (payrollSettingsData as any).enable_bonuses ?? true,
+            enable_deductions: (payrollSettingsData as any).enable_deductions ?? true,
+            default_work_hours: (payrollSettingsData as any).default_work_hours ?? 40,
+            holiday_pay_rate: (payrollSettingsData as any).holiday_pay_rate ?? 1.0,
+            sick_leave_accrual_rate: (payrollSettingsData as any).sick_leave_accrual_rate ?? 0,
+            vacation_leave_accrual_rate: (payrollSettingsData as any).vacation_leave_accrual_rate ?? 0,
+            enable_holiday_pay: (payrollSettingsData as any).enable_holiday_pay ?? false,
+            enable_sick_leave: (payrollSettingsData as any).enable_sick_leave ?? false,
+            enable_vacation_leave: (payrollSettingsData as any).enable_vacation_leave ?? false,
+            enable_401k: (payrollSettingsData as any).enable_401k ?? false,
+            default_401k_contribution: (payrollSettingsData as any).default_401k_contribution ?? 0,
+            enable_health_insurance: (payrollSettingsData as any).enable_health_insurance ?? false,
+            default_health_insurance_deduction: (payrollSettingsData as any).default_health_insurance_deduction ?? 0,
+            created_at: payrollSettingsData.created_at,
+            updated_at: payrollSettingsData.updated_at,
+        };
+        setPayrollSettings(transformedExistingPayrollSettings);
       }
 
       // Fetch employees count
@@ -227,7 +309,25 @@ export default function PayRunsPage() {
         });
       });
 
-      setPayRuns(payRunsData);
+      const validPayRunStatuses = ["draft", "processing", "completed", "cancelled"] as const;
+      type ValidPayRunStatus = typeof validPayRunStatuses[number];
+      const transformedPayRuns: PayRun[] = (payRunsData || []).map((run: any) => ({
+        id: run.id,
+        user_id: run.user_id,
+        period_start: run.period_start,
+        period_end: run.period_end,
+        payment_date: run.payment_date,
+        status: validPayRunStatuses.includes(run.status as any) 
+            ? (run.status as ValidPayRunStatus) 
+            : "draft",
+        total_employees: run.total_employees ?? 0,
+        total_gross: run.total_gross ?? 0,
+        total_deductions: run.total_deductions ?? 0,
+        total_net: run.total_net ?? 0,
+        created_at: run.created_at,
+        updated_at: run.updated_at,
+      }));
+      setPayRuns(transformedPayRuns);
 
       // Calculate summary with fresh data
       const summary = {

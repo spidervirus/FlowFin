@@ -49,8 +49,37 @@ const Icons = {
 type Tables = Database['public']['Tables'];
 type DbAccount = Tables['accounts']['Row'];
 type DbTransaction = Tables['transactions']['Row'];
-type DbBudget = Tables['budgets']['Row'];
-type DbBudgetTracking = Tables['budget_tracking']['Row'];
+
+// Local definitions if 'budgets' and 'budget_tracking' are not in Supabase types
+interface DbBudget {
+  id: string;
+  user_id: string;
+  category_id: string | null;
+  name: string;
+  amount: number; // Assuming 'amount' is part of DbBudget based on BudgetWithTracking
+  period: "monthly" | "quarterly" | "yearly" | "one_time"; // Assuming common periods
+  start_date: string;
+  end_date: string | null;
+  created_at: string;
+  updated_at: string;
+  // Add any other fields that are spread from 'budget' in BudgetWithTracking
+}
+
+interface DbBudgetTracking {
+  id: string;
+  user_id: string;
+  budget_id: string;
+  period_start_date: string;
+  period_end_date: string;
+  planned_amount: number;
+  actual_amount: number;
+  created_at: string;
+  updated_at: string;
+}
+// End local definitions
+
+// type DbBudget = Tables['budgets']['Row']; // Original line, commented out
+// type DbBudgetTracking = Tables['budget_tracking']['Row']; // Original line, commented out
 type DbFinancialGoal = Tables['financial_goals']['Row'];
 
 // Extended types for dashboard use
@@ -105,21 +134,30 @@ interface BudgetMetric {
 
 // Update account filtering and mapping
 const processAccounts = (accounts: DbAccount[] | null): Account[] => {
-  return accounts?.map((account): Account => ({
-    id: account.id,
-    name: account.name,
-    type: account.type,
-    balance: account.balance,
-    currency: account.currency as CurrencyCode,
-    institution: account.institution,
-    account_number: account.account_number,
-    is_active: account.is_active,
-    notes: account.notes,
-    created_at: account.created_at,
-    updated_at: account.updated_at,
-    user_id: account.user_id,
-    previous_balance: account.balance
-  })) || [];
+  const validAccountTypes = ["checking", "savings", "credit", "investment", "cash", "other"] as const;
+  type AccountTypeEnum = typeof validAccountTypes[number];
+
+  return accounts?.map((account): Account => {
+    let validatedType: AccountTypeEnum = "other"; // Default type
+    if (account.type && validAccountTypes.includes(account.type as any)) {
+      validatedType = account.type as AccountTypeEnum;
+    }
+    return {
+      id: account.id,
+      name: account.name,
+      type: validatedType,
+      balance: account.balance,
+      currency: account.currency as CurrencyCode,
+      institution: account.institution,
+      account_number: account.account_number,
+      is_active: account.is_active,
+      notes: account.notes,
+      created_at: account.created_at,
+      updated_at: account.updated_at,
+      user_id: account.user_id,
+      previous_balance: account.balance
+    };
+  }) || [];
 };
 
 // Process transactions for dashboard
@@ -154,18 +192,18 @@ const processGoals = (goals: DbFinancialGoal[] | null): FinancialGoal[] => {
     id: goal.id,
     user_id: goal.user_id,
     name: goal.name,
-    description: null,
+    description: goal.description ?? null, // Use description from DbFinancialGoal
     target_amount: goal.target_amount,
     current_amount: goal.current_amount,
-    start_date: goal.created_at,
+    start_date: goal.start_date ?? goal.created_at, // Prefer start_date if it exists
     target_date: goal.target_date,
-    is_completed: goal.status === 'completed',
-    is_active: goal.status === 'active',
+    is_completed: goal.is_completed ?? false, // Use direct boolean field
+    is_active: goal.is_active ?? true,       // Use direct boolean field
     created_at: goal.created_at,
     updated_at: goal.updated_at,
     category_id: goal.category_id || null,
-    icon: null,
-    color: null,
+    icon: goal.icon ?? null, // Use icon from DbFinancialGoal
+    color: goal.color ?? null, // Use color from DbFinancialGoal
     category: undefined,
     contributions: []
   })) || [];
@@ -274,11 +312,8 @@ export default async function DashboardPage() {
     const balanceChange = lastMonthBalance === 0 ? 100 : 
       ((totalBalance - lastMonthBalance) / Math.abs(lastMonthBalance)) * 100;
 
-    // Transform accounts to match Account type
-    const transformedAccounts = accounts?.map(account => ({
-      ...account,
-      currency: account.currency as CurrencyCode
-    })) || [];
+    // Use the comprehensive processAccounts function to get correctly typed accounts
+    const fullyProcessedAccounts = processAccounts(accounts); 
 
     // Transform transactions to match Transaction type
     const transformedTransactions = currentMonthTransactions
@@ -369,13 +404,13 @@ export default async function DashboardPage() {
             <AccountsSummary
               title="Checking Accounts"
               description="Your primary transaction accounts"
-              accounts={transformedAccounts.filter(a => a.type === 'checking')}
+              accounts={fullyProcessedAccounts.filter(a => a.type === 'checking')}
               currency={currency}
             />
             <AccountsSummary
               title="Savings Accounts"
               description="Your savings and deposits"
-              accounts={transformedAccounts.filter(a => a.type === 'savings')}
+              accounts={fullyProcessedAccounts.filter(a => a.type === 'savings')}
               currency={currency}
             />
           </section>
@@ -389,14 +424,14 @@ export default async function DashboardPage() {
             <AccountsSummary
               title="Credit Accounts"
               description="Your credit cards and loans"
-              accounts={transformedAccounts.filter(a => a.type === 'credit')}
+              accounts={fullyProcessedAccounts.filter(a => a.type === 'credit')}
               currency={currency}
             />
             <GoalsWidget goals={[]} currency={currency} />
           </section>
 
           {/* Info Section */}
-          {(!transformedAccounts || transformedAccounts.length === 0) && (
+          {(!fullyProcessedAccounts || fullyProcessedAccounts.length === 0) && (
             <section className="bg-blue-50 border border-blue-100 rounded-xl p-6 flex gap-4 items-start">
               <InfoIcon size="20" className="text-blue-500 mt-1" />
               <div>

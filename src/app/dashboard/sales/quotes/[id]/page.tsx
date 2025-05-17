@@ -104,7 +104,7 @@ export default function QuoteDetailPage({ params }: QuoteDetailPageProps) {
       case "draft":
         return "secondary";
       case "sent":
-        return "primary";
+        return "default";
       case "accepted":
         return "success";
       case "rejected":

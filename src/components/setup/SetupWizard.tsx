@@ -113,8 +113,9 @@ export default function SetupWizard() {
           .from('profiles')
           .upsert({
             user_id: authenticatedUser.id,
+            email: authenticatedUser.email!,
             full_name: stepData.profile.fullName,
-            title: stepData.profile.title,
+            job_title: stepData.profile.title,
           })
 
         if (profileError) throw profileError

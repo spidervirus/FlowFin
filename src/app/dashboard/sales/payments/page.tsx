@@ -94,7 +94,34 @@ export default function PaymentsPage() {
 
       if (error) throw error;
 
-      setPayments(data || []);
+      const typedPayments = (data || []).map(p => {
+        // Check if p.invoice is a valid object and not a Supabase error/empty relation
+        const mappedInvoice = (p.invoice && typeof p.invoice === 'object' && (p.invoice as any).invoice_number !== undefined)
+          ? {
+              invoice_number: (p.invoice as any).invoice_number as string | null,
+              client_name: (p.invoice as any).client_name as string | null,
+              total_amount: (p.invoice as any).total_amount as number | null,
+              currency_code: (p.invoice as any).currency_code as CurrencyCode | null,
+            }
+          : null;
+
+        // Check if p.transaction is a valid object
+        const mappedTransaction = (p.transaction && typeof p.transaction === 'object' && (p.transaction as any).id !== undefined)
+          ? {
+              id: (p.transaction as any).id as string,
+              reference: (p.transaction as any).reference as string | null,
+            }
+          : null;
+
+        return {
+          ...p,
+          currency_code: mappedInvoice?.currency_code || defaultCurrency,
+          invoice: mappedInvoice,
+          transaction: mappedTransaction,
+        };
+      }) as PaymentWithInvoice[];
+
+      setPayments(typedPayments);
     } catch (error) {
       console.error("Error fetching payments:", error);
       toast.error("Failed to load payments");
@@ -134,11 +161,11 @@ export default function PaymentsPage() {
 
       const companyInfo = {
         name: organization.name,
-        address: organization.address || "",
-        phone: organization.phone || "",
-        email: organization.email || "",
-        website: organization.website || "",
-        taxId: organization.tax_id || "",
+        address: (organization as any).address || "",
+        phone: (organization as any).phone || "",
+        email: (organization as any).email || "",
+        website: (organization as any).website || "",
+        taxId: (organization as any).tax_id || "",
       };
 
       const blob = await generatePaymentReceipt(payment, companyInfo);

@@ -138,9 +138,9 @@ export default function UserList() {
       const formattedUsers: User[] = usersData.map((userData) => ({
         id: userData.user_id,
         email: userData.email,
-        user_metadata: userData.user_metadata || undefined,
-        role: userData.role,
-        status: userData.status,
+        user_metadata: userData.user_metadata as { full_name?: string; avatar_url?: string; } || undefined,
+        role: userData.role as UserRole,
+        status: userData.status as UserStatus,
         last_active: userData.last_active || undefined,
       }));
 
@@ -179,7 +179,7 @@ export default function UserList() {
 
       if (rpcError) throw rpcError;
       
-      const response = data as InviteUserResponse;
+      const response = data as unknown as InviteUserResponse;
       if (!response) throw new Error("No response from server");
       if (!response.success) {
         throw new Error(response.error || "Failed to invite user");

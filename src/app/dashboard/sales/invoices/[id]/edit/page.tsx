@@ -29,8 +29,12 @@ import { format } from "date-fns";
 import { Database } from '@/types/supabase'
 
 type Invoice = Database['public']['Tables']['invoices']['Row']
-type Customer = Database['public']['Tables']['customers']['Row']
+type DbCustomer = Database['public']['Tables']['customers']['Row']
 type InvoiceItemRow = Database['public']['Tables']['invoice_items']['Row'];
+
+interface CustomerWithMappedName extends DbCustomer { 
+  name: string;
+}
 
 interface InvoiceItem {
   id?: string;
@@ -86,7 +90,7 @@ export default function EditInvoicePage() {
     shipping_address: "",
   });
   const [selectedCustomerDisplay, setSelectedCustomerDisplay] = useState<SelectedCustomerDetails | null>(null);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<CustomerWithMappedName[]>([]);
 
   console.log("[EDIT PAGE DEBUG - Render] Current 'saving' state:", saving);
 
@@ -114,9 +118,12 @@ export default function EditInvoicePage() {
           setCustomers([]);
         } else {
           const mappedCustomers = fetchedCustomers 
-            ? fetchedCustomers.map(c => ({ ...c, name: c.company_name })) 
+            ? fetchedCustomers.map(c => ({ 
+                ...c, 
+                name: c.company_name || (c as any).name || "Unnamed Customer"
+              })) 
             : [];
-          setCustomers(mappedCustomers as Customer[]); 
+          setCustomers(mappedCustomers as CustomerWithMappedName[]); 
           console.log("[EDIT PAGE DEBUG] Fetched and mapped customers for dropdown:", mappedCustomers);
         }
 
@@ -174,7 +181,7 @@ export default function EditInvoicePage() {
           const transformedItems = typedItemsData 
             ? typedItemsData.map(item => ({
                 id: item.id,
-                item_id: item.item_id,
+                item_id: (item as any).item_id as string | null,
                 description: item.description,
                 quantity: item.quantity,
                 unit_price: item.unit_price,

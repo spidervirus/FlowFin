@@ -79,9 +79,27 @@ export default function BudgetsPage() {
           return;
         }
 
-        setSettings(settingsData);
-        if (settingsData?.default_currency) {
-          setCurrency(settingsData.default_currency as CurrencyCode);
+        if (settingsData) {
+          const transformedSettings: CompanySettings = {
+            // Ensure all fields from settingsData are mapped and typed correctly
+            // for CompanySettings. Handle potential nulls if CompanySettings expects undefined.
+            id: settingsData.id,
+            user_id: settingsData.user_id,
+            company_name: settingsData.company_name ?? undefined,
+            // Cast default_currency to CurrencyCode; consider validation if necessary
+            default_currency: settingsData.default_currency as CurrencyCode, 
+            country: (settingsData as any).country ?? undefined, // Assuming country might exist on settingsData
+            fiscal_year_start: (settingsData as any).fiscal_year_start ?? undefined, // Assuming fiscal_year_start might exist
+            created_at: settingsData.created_at,
+            updated_at: settingsData.updated_at,
+            // Add any other fields from CompanySettings, ensuring they are present in settingsData or handled
+          };
+          setSettings(transformedSettings);
+          if (transformedSettings.default_currency) {
+            setCurrency(transformedSettings.default_currency);
+          }
+        } else {
+          setSettings(null); // Explicitly set to null if no settingsData
         }
 
         // Get current month for filtering
@@ -89,14 +107,14 @@ export default function BudgetsPage() {
         const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-01`;
 
         // Fetch active budgets
-        const { data: budgetsData, error: budgetsError } = await supabaseClient
+        const { data: budgetsData, error: budgetsError } = (await supabaseClient
           .from("budgets")
           .select("*")
           .eq("user_id", user.id)
           .eq("is_active", true)
           .lte("start_date", currentDate.toISOString().split("T")[0])
           .gte("end_date", currentDate.toISOString().split("T")[0])
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })) as { data: any[] | null; error: any };
 
         if (budgetsError) {
           console.error("Error fetching budgets:", budgetsError);
@@ -105,11 +123,11 @@ export default function BudgetsPage() {
         }
 
         if (budgetsData && budgetsData.length > 0) {
-          const budgetIds = budgetsData.map((budget) => budget.id);
+          const budgetIds = budgetsData.map((budget: any) => budget.id);
 
           // Fetch budget categories
           const { data: rawCategoriesData, error: categoriesError } =
-            await supabaseClient
+            (await supabaseClient
               .from("budget_categories")
               .select(
                 `
@@ -122,7 +140,7 @@ export default function BudgetsPage() {
               `,
               )
               .in("budget_id", budgetIds)
-              .eq("user_id", user.id);
+              .eq("user_id", user.id)) as { data: any[] | null; error: any };
 
           if (categoriesError) {
             console.error("Error fetching budget categories:", categoriesError);
@@ -131,8 +149,8 @@ export default function BudgetsPage() {
           }
 
           // Add categories to each budget
-          const categoriesData = (rawCategoriesData as unknown) as CategoryData[];
-          const budgetsWithCategories = budgetsData.map((budget) => ({
+          const categoriesData = (rawCategoriesData || []) as CategoryData[];
+          const budgetsWithCategories = budgetsData.map((budget: any) => ({
             ...budget,
             budget_categories: categoriesData
               .filter((item) => item.budget_id === budget.id)
@@ -151,14 +169,14 @@ export default function BudgetsPage() {
 
           // Fetch budget tracking data
           const { data: trackingData, error: trackingError } =
-            await supabaseClient
+            (await supabaseClient
               .from("budget_tracking")
               .select(`
                 *,
                 category:categories(id, name, type, color)
               `)
               .eq("user_id", user.id)
-              .gte("month", currentMonth);
+              .gte("month", currentMonth)) as { data: any[] | null; error: any };
 
           if (trackingError) {
             console.error("Error fetching budget tracking:", trackingError);
@@ -167,7 +185,7 @@ export default function BudgetsPage() {
           }
 
           // Transform the tracking data to match BudgetTracking interface
-          const transformedTracking: BudgetTracking[] = (trackingData || []).map((item: DatabaseBudgetTracking) => ({
+          const transformedTracking: BudgetTracking[] = (trackingData || []).map((item: any) => ({
             id: item.id,
             user_id: user.id,
             budget_id: item.budget_id,

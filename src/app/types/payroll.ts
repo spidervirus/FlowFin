@@ -51,7 +51,7 @@ export type PayRunEmployee = Tables["pay_run_employees"]["Row"] & {
 };
 
 // Time tracking types
-export type TimeEntry = Tables["time_entries"]["Row"] & {
+export type TimeEntry = Tables["timesheet_entries"]["Row"] & {
   employee?: Employee;
 };
 

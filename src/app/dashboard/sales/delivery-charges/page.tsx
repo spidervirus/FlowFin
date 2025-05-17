@@ -85,7 +85,27 @@ export default function DeliveryChargesPage() {
   const handleCreateShippingZone = async (data: ShippingZoneFormValues) => {
     try {
       setIsSubmitting(true);
-      const { error } = await supabase.from("shipping_zones").insert(data);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("You must be logged in to create a shipping zone.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Validate required fields from form values
+      if (!data.name || !data.countries || data.countries.length === 0) {
+        toast.error("Zone name and at least one country are required.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const payload = {
+        ...data,
+        name: data.name, // Ensure name is explicitly passed as string
+        countries: data.countries, // Ensure countries is explicitly passed as string[]
+        user_id: user.id,
+      };
+      const { error } = await supabase.from("shipping_zones").insert(payload);
       if (error) throw error;
       toast.success("Shipping zone created successfully");
       setIsZoneDialogOpen(false);
@@ -101,7 +121,28 @@ export default function DeliveryChargesPage() {
   const handleCreateDeliveryRate = async (data: DeliveryChargeRateFormValues) => {
     try {
       setIsSubmitting(true);
-      const { error } = await supabase.from("delivery_charge_rates").insert(data);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("You must be logged in to create a delivery rate.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Validate required fields from form values
+      if (!data.name || data.base_rate === undefined || !data.shipping_zone_id) {
+        toast.error("Rate name, base rate, and shipping zone are required.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const payload = {
+        ...data,
+        name: data.name, // Ensure name is string
+        base_rate: data.base_rate, // Ensure base_rate is number
+        shipping_zone_id: data.shipping_zone_id, // Ensure shipping_zone_id is string
+        user_id: user.id,
+      };
+      const { error } = await supabase.from("delivery_charge_rates").insert(payload);
       if (error) throw error;
       toast.success("Delivery rate created successfully");
       setIsRateDialogOpen(false);

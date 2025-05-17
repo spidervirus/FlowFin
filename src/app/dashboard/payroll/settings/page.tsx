@@ -44,12 +44,12 @@ import { type PayrollSettings } from "@/app/types/payroll";
 const payrollSettingsSchema = z.object({
   pay_schedule: z.enum(["weekly", "bi_weekly", "monthly"]),
   pay_day: z.string().min(1, "Pay day is required"),
-  overtime_rate: z.string().min(1, "Overtime rate is required"),
-  tax_rate: z.string().min(1, "Tax rate is required"),
   enable_overtime: z.boolean(),
   enable_bonuses: z.boolean(),
   enable_deductions: z.boolean(),
-  default_work_hours: z.string().min(1, "Default work hours is required"),
+  overtime_rate: z.string().min(1, "Overtime rate is required"),
+  tax_rate: z.string().min(1, "Tax rate is required"),
+  overtime_threshold: z.string().min(1, "Overtime threshold (weekly hours) is required"),
   holiday_pay_rate: z.string().min(1, "Holiday pay rate is required"),
   sick_leave_accrual_rate: z
     .string()
@@ -63,33 +63,15 @@ const payrollSettingsSchema = z.object({
   enable_401k: z.boolean(),
   default_401k_contribution: z
     .string()
-    .min(1, "Default 401k contribution is required"),
+    .min(1, "Default 401k contribution (%) is required"),
   enable_health_insurance: z.boolean(),
   default_health_insurance_deduction: z
     .string()
-    .min(1, "Default health insurance deduction is required"),
+    .min(1, "Default health insurance deduction ($) is required"),
 });
 
-type PayrollSettingsFormValues = {
-  pay_schedule: "weekly" | "bi_weekly" | "monthly";
-  pay_day: string;
-  overtime_rate: string;
-  tax_rate: string;
-  enable_overtime: boolean;
-  enable_bonuses: boolean;
-  enable_deductions: boolean;
-  default_work_hours: string;
-  holiday_pay_rate: string;
-  sick_leave_accrual_rate: string;
-  vacation_leave_accrual_rate: string;
-  enable_holiday_pay: boolean;
-  enable_sick_leave: boolean;
-  enable_vacation_leave: boolean;
-  enable_401k: boolean;
-  default_401k_contribution: string;
-  enable_health_insurance: boolean;
-  default_health_insurance_deduction: string;
-};
+// Derive the form values type from the Zod schema to ensure they are always in sync
+type PayrollSettingsFormValues = z.infer<typeof payrollSettingsSchema>;
 
 export default function PayrollSettingsPage() {
   const router = useRouter();
@@ -101,12 +83,12 @@ export default function PayrollSettingsPage() {
     defaultValues: {
       pay_schedule: "monthly",
       pay_day: "1",
-      overtime_rate: "1.5",
-      tax_rate: "20",
       enable_overtime: true,
       enable_bonuses: true,
       enable_deductions: true,
-      default_work_hours: "40",
+      overtime_rate: "1.5",
+      tax_rate: "20",
+      overtime_threshold: "40",
       holiday_pay_rate: "1.5",
       sick_leave_accrual_rate: "0.0385",
       vacation_leave_accrual_rate: "0.0385",
@@ -149,26 +131,26 @@ export default function PayrollSettingsPage() {
         }
 
         if (data) {
-          // Convert numeric values to strings for the form
-          const formData = {
-            pay_schedule: data.pay_schedule,
-            pay_day: data.pay_day.toString(),
-            overtime_rate: data.overtime_rate.toString(),
-            tax_rate: data.tax_rate.toString(),
-            enable_overtime: data.enable_overtime,
-            enable_bonuses: data.enable_bonuses,
-            enable_deductions: data.enable_deductions,
-            default_work_hours: data.default_work_hours.toString(),
-            holiday_pay_rate: data.holiday_pay_rate?.toString() || "1.5",
-            sick_leave_accrual_rate: data.sick_leave_accrual_rate?.toString() || "0.0385",
-            vacation_leave_accrual_rate: data.vacation_leave_accrual_rate?.toString() || "0.0385",
-            enable_holiday_pay: data.enable_holiday_pay ?? true,
-            enable_sick_leave: data.enable_sick_leave ?? true,
-            enable_vacation_leave: data.enable_vacation_leave ?? true,
-            enable_401k: data.enable_401k ?? true,
-            default_401k_contribution: data.default_401k_contribution?.toString() || "6",
-            enable_health_insurance: data.enable_health_insurance ?? true,
-            default_health_insurance_deduction: data.default_health_insurance_deduction?.toString() || "200",
+          // Map DB data to form fields, using correct DB column names
+          const formData: PayrollSettingsFormValues = {
+            pay_schedule: (data.pay_schedule as PayrollSettingsFormValues['pay_schedule']) ?? form.formState.defaultValues.pay_schedule!,
+            pay_day: data.pay_day?.toString() ?? form.formState.defaultValues.pay_day!,
+            enable_overtime: data.enable_overtime !== undefined && data.enable_overtime !== null ? !!data.enable_overtime : form.formState.defaultValues.enable_overtime!,
+            enable_bonuses: data.enable_bonuses !== undefined && data.enable_bonuses !== null ? !!data.enable_bonuses : form.formState.defaultValues.enable_bonuses!,
+            enable_deductions: data.enable_deductions !== undefined && data.enable_deductions !== null ? !!data.enable_deductions : form.formState.defaultValues.enable_deductions!,
+            overtime_rate: data.overtime_rate?.toString() ?? form.formState.defaultValues.overtime_rate!,
+            tax_rate: data.tax_rate?.toString() ?? form.formState.defaultValues.tax_rate!,
+            overtime_threshold: data.overtime_threshold?.toString() ?? form.formState.defaultValues.overtime_threshold!,
+            holiday_pay_rate: data.holiday_pay_rate?.toString() ?? form.formState.defaultValues.holiday_pay_rate!,
+            sick_leave_accrual_rate: data.sick_leave_accrual_rate?.toString() ?? form.formState.defaultValues.sick_leave_accrual_rate!,
+            vacation_leave_accrual_rate: data.vacation_leave_accrual_rate?.toString() ?? form.formState.defaultValues.vacation_leave_accrual_rate!,
+            enable_holiday_pay: data.enable_holiday_pay !== undefined && data.enable_holiday_pay !== null ? !!data.enable_holiday_pay : form.formState.defaultValues.enable_holiday_pay!,
+            enable_sick_leave: data.enable_sick_leave !== undefined && data.enable_sick_leave !== null ? !!data.enable_sick_leave : form.formState.defaultValues.enable_sick_leave!,
+            enable_vacation_leave: data.enable_vacation_leave !== undefined && data.enable_vacation_leave !== null ? !!data.enable_vacation_leave : form.formState.defaultValues.enable_vacation_leave!,
+            enable_401k: data.enable_401k !== undefined && data.enable_401k !== null ? !!data.enable_401k : form.formState.defaultValues.enable_401k!,
+            default_401k_contribution: data.default_401k_contribution?.toString() ?? form.formState.defaultValues.default_401k_contribution!,
+            enable_health_insurance: data.enable_health_insurance !== undefined && data.enable_health_insurance !== null ? !!data.enable_health_insurance : form.formState.defaultValues.enable_health_insurance!,
+            default_health_insurance_deduction: data.default_health_insurance_deduction?.toString() ?? form.formState.defaultValues.default_health_insurance_deduction!,
           };
           form.reset(formData);
         }
@@ -196,17 +178,18 @@ export default function PayrollSettingsPage() {
         return;
       }
 
-      // Convert string values to numbers for the database
+      // Convert string values from form to numbers/correct types for the database
+      // Ensure keys here match the Zod schema / actual DB column names
       const dbData = {
         user_id: user.id,
         pay_schedule: formData.pay_schedule,
         pay_day: formData.pay_day,
-        overtime_rate: parseFloat(formData.overtime_rate),
-        tax_rate: parseFloat(formData.tax_rate),
         enable_overtime: formData.enable_overtime,
         enable_bonuses: formData.enable_bonuses,
         enable_deductions: formData.enable_deductions,
-        default_work_hours: parseFloat(formData.default_work_hours),
+        overtime_rate: parseFloat(formData.overtime_rate),
+        tax_rate: parseFloat(formData.tax_rate),
+        overtime_threshold: parseInt(formData.overtime_threshold, 10),
         holiday_pay_rate: parseFloat(formData.holiday_pay_rate),
         sick_leave_accrual_rate: parseFloat(formData.sick_leave_accrual_rate),
         vacation_leave_accrual_rate: parseFloat(formData.vacation_leave_accrual_rate),
@@ -267,460 +250,439 @@ export default function PayrollSettingsPage() {
 
         <Tabs defaultValue="general" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="general">General Settings</TabsTrigger>
-            <TabsTrigger value="leave">Leave & Benefits</TabsTrigger>
-            <TabsTrigger value="deductions">Deductions</TabsTrigger>
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="rates">Rates & Thresholds</TabsTrigger>
+            <TabsTrigger value="leave">Leave</TabsTrigger>
+            <TabsTrigger value="benefits">Benefits</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="general">
-            <Card>
-              <CardHeader>
-                <CardTitle>General Settings</CardTitle>
-                <CardDescription>
-                  Set up your basic payroll configuration
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Form {...form}>
-                  <form
-                    onSubmit={form.handleSubmit(onSubmit)}
-                    className="space-y-6"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        control={form.control}
-                        name="pay_schedule"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Pay Schedule</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select pay schedule" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="weekly">Weekly</SelectItem>
-                                <SelectItem value="bi_weekly">
-                                  Bi-Weekly
-                                </SelectItem>
-                                <SelectItem value="monthly">Monthly</SelectItem>
-                              </SelectContent>
-                            </Select>
+          <Separator />
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+              <TabsContent value="general" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Pay Schedule</CardTitle>
+                    <CardDescription>
+                      Configure how often employees are paid.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="pay_schedule"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Pay Schedule</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a pay schedule" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="weekly">Weekly</SelectItem>
+                              <SelectItem value="bi_weekly">
+                                Bi-weekly
+                              </SelectItem>
+                              <SelectItem value="monthly">Monthly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            Choose how frequently payroll is processed.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="pay_day"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Pay Day</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., Friday or 15" {...field} />
+                          </FormControl>
+                          <FormDescription>
+                            Specify the day of the week (for weekly/bi-weekly) or
+                            day of the month (for monthly) that employees are
+                            paid.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="rates" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Overtime & Tax</CardTitle>
+                    <CardDescription>
+                      Set rates for overtime and general tax.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="enable_overtime"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">
+                              Enable Overtime
+                            </FormLabel>
                             <FormDescription>
-                              How often employees are paid
+                              Allow employees to accrue overtime pay.
                             </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="overtime_rate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Overtime Rate Multiplier</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="e.g., 1.5" {...field} />
+                          </FormControl>
+                          <FormDescription>
+                            Multiplier for regular pay rate for overtime hours (e.g., 1.5 for time and a half).
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                     <FormField
+                      control={form.control}
+                      name="overtime_threshold"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Overtime Threshold (Weekly Hours)</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="e.g., 40" {...field} />
+                          </FormControl>
+                          <FormDescription>
+                           Number of hours per week after which overtime pay applies.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="tax_rate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Default Tax Rate (%)</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="e.g., 20" {...field} />
+                          </FormControl>
+                          <FormDescription>
+                            Default overall tax rate percentage. Specific tax calculations may vary.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-                      <FormField
-                        control={form.control}
-                        name="pay_day"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Pay Day</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min="1"
-                                max="31"
-                                {...field}
-                              />
-                            </FormControl>
+              <TabsContent value="leave" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Leave Policies</CardTitle>
+                    <CardDescription>
+                      Configure settings for various types of employee leave.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="enable_holiday_pay"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">
+                              Enable Holiday Pay
+                            </FormLabel>
                             <FormDescription>
-                              Day of the month/week when salaries are paid
+                              Activate special pay rates for holidays.
                             </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="overtime_rate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Overtime Rate</FormLabel>
-                            <FormControl>
-                              <Input type="number" step="0.1" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              Multiplier for overtime hours (e.g., 1.5 for time
-                              and a half)
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="tax_rate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Default Tax Rate (%)</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min="0"
-                                max="100"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Default tax rate for salary calculations
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="default_work_hours"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Default Work Hours (Weekly)</FormLabel>
-                            <FormControl>
-                              <Input type="number" min="0" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              Standard work hours per week
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="enable_overtime"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                            <div className="space-y-0.5">
-                              <FormLabel>Enable Overtime</FormLabel>
-                              <FormDescription>
-                                Allow overtime calculations in payroll
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="enable_bonuses"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                            <div className="space-y-0.5">
-                              <FormLabel>Enable Bonuses</FormLabel>
-                              <FormDescription>
-                                Allow bonus payments in payroll
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="holiday_pay_rate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Holiday Pay Rate Multiplier</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="e.g., 2.0" {...field} />
+                          </FormControl>
+                           <FormDescription>
+                            Multiplier for regular pay rate for work on holidays (e.g., 2.0 for double time).
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     <Separator />
-
-                    <div className="flex justify-end">
-                      <Button type="submit" disabled={saving}>
-                        {saving ? "Saving..." : "Save Settings"}
-                      </Button>
-                    </div>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="leave">
-            <Card>
-              <CardHeader>
-                <CardTitle>Leave & Benefits</CardTitle>
-                <CardDescription>
-                  Configure leave policies and benefits
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Form {...form}>
-                  <form
-                    onSubmit={form.handleSubmit(onSubmit)}
-                    className="space-y-6"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        control={form.control}
-                        name="holiday_pay_rate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Holiday Pay Rate</FormLabel>
-                            <FormControl>
-                              <Input type="number" step="0.1" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              Multiplier for holiday hours (e.g., 1.5 for time
-                              and a half)
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="sick_leave_accrual_rate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              Sick Leave Accrual Rate (days/month)
+                     <FormField
+                      control={form.control}
+                      name="enable_sick_leave"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">
+                              Enable Sick Leave
                             </FormLabel>
-                            <FormControl>
-                              <Input type="number" step="0.01" {...field} />
-                            </FormControl>
                             <FormDescription>
-                              Number of sick leave days accrued per month
+                              Allow employees to accrue and use sick leave.
                             </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="vacation_leave_accrual_rate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              Vacation Leave Accrual Rate (days/month)
-                            </FormLabel>
-                            <FormControl>
-                              <Input type="number" step="0.01" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              Number of vacation days accrued per month
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="enable_holiday_pay"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                            <div className="space-y-0.5">
-                              <FormLabel>Enable Holiday Pay</FormLabel>
-                              <FormDescription>
-                                Apply holiday pay rate for holiday hours
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="enable_sick_leave"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                            <div className="space-y-0.5">
-                              <FormLabel>Enable Sick Leave</FormLabel>
-                              <FormDescription>
-                                Allow sick leave accrual and usage
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="enable_vacation_leave"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                            <div className="space-y-0.5">
-                              <FormLabel>Enable Vacation Leave</FormLabel>
-                              <FormDescription>
-                                Allow vacation leave accrual and usage
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="sick_leave_accrual_rate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Sick Leave Accrual Rate (Hours per Hour Worked)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.0001" placeholder="e.g., 0.0385 for 1 hour per 26 hours worked" {...field} />
+                          </FormControl>
+                          <FormDescription>
+                            Rate at which sick leave is accrued. For example, 0.0385 hours of sick leave per hour worked.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     <Separator />
-
-                    <div className="flex justify-end">
-                      <Button type="submit" disabled={saving}>
-                        {saving ? "Saving..." : "Save Settings"}
-                      </Button>
-                    </div>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="deductions">
-            <Card>
-              <CardHeader>
-                <CardTitle>Deductions</CardTitle>
-                <CardDescription>
-                  Configure salary deductions and benefits
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Form {...form}>
-                  <form
-                    onSubmit={form.handleSubmit(onSubmit)}
-                    className="space-y-6"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        control={form.control}
-                        name="default_401k_contribution"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              Default 401(k) Contribution (%)
+                    <FormField
+                      control={form.control}
+                      name="enable_vacation_leave"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">
+                              Enable Vacation Leave
                             </FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min="0"
-                                max="100"
-                                {...field}
-                              />
-                            </FormControl>
                             <FormDescription>
-                              Default percentage of salary for 401(k)
-                              contributions
+                               Allow employees to accrue and use vacation leave.
                             </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="vacation_leave_accrual_rate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Vacation Accrual Rate (Hours per Hour Worked)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.0001" placeholder="e.g., 0.0385 for 1 hour per 26 hours worked" {...field} />
+                          </FormControl>
+                          <FormDescription>
+                             Rate at which vacation leave is accrued. For example, 0.0385 hours of vacation leave per hour worked.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-                      <FormField
-                        control={form.control}
-                        name="default_health_insurance_deduction"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              Default Health Insurance Deduction ($)
-                            </FormLabel>
-                            <FormControl>
-                              <Input type="number" min="0" {...field} />
-                            </FormControl>
+              <TabsContent value="benefits" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Benefits & Deductions</CardTitle>
+                    <CardDescription>
+                      Manage settings for 401(k), health insurance, and other deductions.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="enable_bonuses"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">Enable Bonuses</FormLabel>
                             <FormDescription>
-                              Default monthly health insurance premium deduction
+                              Allow bonuses to be added to payroll.
                             </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="enable_401k"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                            <div className="space-y-0.5">
-                              <FormLabel>Enable 401(k)</FormLabel>
-                              <FormDescription>
-                                Allow 401(k) contributions and deductions
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="enable_health_insurance"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                            <div className="space-y-0.5">
-                              <FormLabel>Enable Health Insurance</FormLabel>
-                              <FormDescription>
-                                Allow health insurance premium deductions
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="enable_deductions"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">Enable General Deductions</FormLabel>
+                            <FormDescription>
+                              Allow general deductions to be applied to payroll.
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
                     <Separator />
+                    <FormField
+                      control={form.control}
+                      name="enable_401k"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">
+                              Enable 401(k) Contributions
+                            </FormLabel>
+                            <FormDescription>
+                              Allow employees to contribute to a 401(k) plan.
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="default_401k_contribution"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Default 401(k) Contribution Rate (%)</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="e.g., 6" {...field} />
+                          </FormControl>
+                          <FormDescription>
+                            Default percentage of gross pay contributed to 401(k) if an employee opts in.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Separator />
+                     <FormField
+                      control={form.control}
+                      name="enable_health_insurance"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">
+                              Enable Health Insurance Deductions
+                            </FormLabel>
+                            <FormDescription>
+                              Allow deductions for health insurance premiums.
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="default_health_insurance_deduction"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Default Health Insurance Deduction ($)</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="e.g., 200" {...field} />
+                          </FormControl>
+                           <FormDescription>
+                            Default amount deducted per pay period for health insurance.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-                    <div className="flex justify-end">
-                      <Button type="submit" disabled={saving}>
-                        {saving ? "Saving..." : "Save Settings"}
-                      </Button>
-                    </div>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.back()}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving ? (
+                    <LoadingSpinner text="Saving..." />
+                  ) : (
+                    "Save Settings"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </Tabs>
       </div>
     </DashboardWrapper>

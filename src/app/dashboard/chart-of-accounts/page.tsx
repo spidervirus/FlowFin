@@ -42,7 +42,7 @@ interface CompanySettings {
   company_name: string;
   default_currency: string;
   address?: string;
-  country: string;
+  country?: string;
   fiscal_year_start: string;
   industry?: string;
   created_at: string;
@@ -86,7 +86,23 @@ export default function ChartOfAccountsPage() {
           throw settingsError;
         }
 
-        setSettings(settingsData);
+        if (settingsData) {
+          const transformedSettings: CompanySettings = {
+            id: settingsData.id,
+            user_id: settingsData.user_id,
+            company_name: settingsData.company_name ?? "N/A",
+            default_currency: settingsData.default_currency ?? "USD",
+            address: settingsData.address ?? undefined,
+            country: (settingsData as any).country ?? undefined,
+            fiscal_year_start: settingsData.fiscal_year_start ?? "",
+            industry: settingsData.industry ?? undefined,
+            created_at: settingsData.created_at ?? "",
+            updated_at: settingsData.updated_at ?? "",
+          };
+          setSettings(transformedSettings);
+        } else {
+          setSettings(null);
+        }
 
         // Fetch accounts
         const { data: accountsData, error: accountsError } = await supabase
@@ -97,7 +113,26 @@ export default function ChartOfAccountsPage() {
 
         if (accountsError) throw accountsError;
 
-        setAccounts(accountsData || []);
+        const transformedAccounts = (accountsData || []).map(acc => {
+          const validTypes = ["asset", "liability", "equity", "revenue", "expense"];
+          const accountType = validTypes.includes(acc.type) 
+                              ? acc.type as ChartOfAccount['type'] 
+                              : "asset" as ChartOfAccount['type'];
+          return {
+            ...acc,
+            id: acc.id,
+            user_id: acc.user_id,
+            code: acc.code,
+            name: acc.name,
+            type: accountType,
+            description: acc.description ?? "",
+            parent_id: acc.parent_id ?? undefined,
+            is_active: acc.is_active ?? true,
+            created_at: acc.created_at ?? "",
+            updated_at: acc.updated_at ?? "",
+          } as ChartOfAccount;
+        });
+        setAccounts(transformedAccounts);
       } catch (error) {
         console.error("Error:", error);
         toast.error("Error loading data");

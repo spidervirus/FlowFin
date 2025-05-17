@@ -1775,14 +1775,19 @@ export type Database = {
           default_401k_contribution: number | null
           default_health_insurance_deduction: number | null
           enable_401k: boolean | null
+          enable_bonuses: boolean | null
+          enable_deductions: boolean | null
           enable_health_insurance: boolean | null
           enable_holiday_pay: boolean | null
+          enable_overtime: boolean | null
           enable_sick_leave: boolean | null
           enable_vacation_leave: boolean | null
           holiday_pay_rate: number | null
           id: string
           overtime_rate: number
           overtime_threshold: number
+          pay_day: string | null
+          pay_schedule: string | null
           sick_leave_accrual_rate: number | null
           tax_rate: number
           updated_at: string
@@ -1794,14 +1799,19 @@ export type Database = {
           default_401k_contribution?: number | null
           default_health_insurance_deduction?: number | null
           enable_401k?: boolean | null
+          enable_bonuses?: boolean | null
+          enable_deductions?: boolean | null
           enable_health_insurance?: boolean | null
           enable_holiday_pay?: boolean | null
+          enable_overtime?: boolean | null
           enable_sick_leave?: boolean | null
           enable_vacation_leave?: boolean | null
           holiday_pay_rate?: number | null
           id?: string
           overtime_rate?: number
           overtime_threshold?: number
+          pay_day?: string | null
+          pay_schedule?: string | null
           sick_leave_accrual_rate?: number | null
           tax_rate?: number
           updated_at?: string
@@ -1813,14 +1823,19 @@ export type Database = {
           default_401k_contribution?: number | null
           default_health_insurance_deduction?: number | null
           enable_401k?: boolean | null
+          enable_bonuses?: boolean | null
+          enable_deductions?: boolean | null
           enable_health_insurance?: boolean | null
           enable_holiday_pay?: boolean | null
+          enable_overtime?: boolean | null
           enable_sick_leave?: boolean | null
           enable_vacation_leave?: boolean | null
           holiday_pay_rate?: number | null
           id?: string
           overtime_rate?: number
           overtime_threshold?: number
+          pay_day?: string | null
+          pay_schedule?: string | null
           sick_leave_accrual_rate?: number | null
           tax_rate?: number
           updated_at?: string

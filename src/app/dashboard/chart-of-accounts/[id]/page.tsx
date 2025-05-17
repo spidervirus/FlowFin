@@ -111,19 +111,35 @@ export default function AccountPage({ params }: { params: { id: string } }) {
           return;
         }
 
-        const transformedData = {
+        // Validate and transform account type
+        const validTypes = ["asset", "liability", "equity", "revenue", "expense"] as const;
+        type AccountTypeEnum = typeof validTypes[number];
+
+        let validatedAccountType: AccountTypeEnum = "asset"; // Default value
+        if (data.type && validTypes.includes(data.type as any)) {
+          validatedAccountType = data.type as AccountTypeEnum;
+        }
+
+        const transformedData: ChartOfAccount = {
           ...data,
-          description: data.description ?? null,
-          parent_id: data.parent_id ?? null,
+          type: validatedAccountType, // Use the validated and strictly typed value
+          description: data.description ?? "", // Default to empty string if null
+          parent_id: data.parent_id ?? undefined, // Default to undefined if null, matching schema
+          is_active: data.is_active ?? true, // Default to true if null
+          // Ensure created_at and updated_at match ChartOfAccount type (assuming string, not null)
+          created_at: data.created_at ?? "",
+          updated_at: data.updated_at ?? "",
+          // If 'currency' is part of ChartOfAccount and can be null from DB, handle it:
+          // currency: data.currency ?? undefined, // or a default currency string
         };
         setAccount(transformedData);
         form.reset({
           code: transformedData.code,
           name: transformedData.name,
-          type: transformedData.type,
-          description: transformedData.description || "",
-          is_active: transformedData.is_active,
-          parent_id: transformedData.parent_id || undefined,
+          type: validatedAccountType, // Use the validated and strictly typed value here as well
+          description: transformedData.description, // Now string
+          is_active: transformedData.is_active, // Now boolean
+          parent_id: transformedData.parent_id, // Now string | undefined
         });
       } catch (error) {
         console.error("Error:", error);

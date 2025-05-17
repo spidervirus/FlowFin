@@ -152,7 +152,19 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
         return;
       }
 
-      setSettings(settingsData);
+      if (settingsData) {
+        const companySettings: CompanySettings = {
+          id: settingsData.id,
+          user_id: settingsData.user_id,
+          company_name: settingsData.company_name || undefined,
+          default_currency: settingsData.default_currency as CurrencyCode,
+          country: (settingsData as any).country || undefined,
+          fiscal_year_start: settingsData.fiscal_year_start || undefined,
+          created_at: settingsData.created_at,
+          updated_at: settingsData.updated_at,
+        };
+        setSettings(companySettings);
+      }
 
       // Get date range based on timeframe
       const endDate = new Date();

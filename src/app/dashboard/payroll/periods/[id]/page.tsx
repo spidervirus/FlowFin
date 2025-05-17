@@ -37,6 +37,7 @@ import { ArrowLeft, Trash2, FileText, Play, CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { type Employee, type Payslip, type PayrollPeriod, type CompanySettings } from "@/app/types/payroll";
 import { type Database } from "@/types/supabase";
+import { CurrencyCode } from "@/lib/utils";
 
 type Tables = Database["public"]["Tables"];
 type PayslipInsert = Tables["payslips"]["Insert"];
@@ -80,8 +81,31 @@ export default function PayrollPeriodPage({
 
         if (settingsError) {
           console.error("Error fetching company settings:", settingsError);
+          setSettings(null);
+        } else if (settingsData) {
+          // Explicitly define the structure according to your local CompanySettings type
+          // Source from settingsData (casted to any for potentially missing fields like country if supabase.ts is old)
+          // or provide defaults.
+          const fetchedSettings = settingsData as any;
+          const transformedSettings: CompanySettings = {
+            id: fetchedSettings.id,
+            user_id: fetchedSettings.user_id,
+            company_name: fetchedSettings.company_name ?? "N/A",
+            address: fetchedSettings.address ?? "Default Address",
+            country: fetchedSettings.country ?? "US",
+            default_currency: (fetchedSettings.default_currency as CurrencyCode) ?? "USD",
+            fiscal_year_start: fetchedSettings.fiscal_year_start ?? "01-01",
+            industry: fetchedSettings.industry ?? "General",
+            phone_number: fetchedSettings.phone_number ?? "N/A",
+            company_size: fetchedSettings.company_size ?? "1-10",
+            created_at: fetchedSettings.created_at,
+            updated_at: fetchedSettings.updated_at,
+            // Add any other fields EXPLICITLY that your local CompanySettings type defines
+            // but might not be in the settingsData object from an old supabase.ts
+          };
+          setSettings(transformedSettings);
         } else {
-          setSettings(settingsData);
+          setSettings(null);
         }
 
         // Fetch payroll period
@@ -94,7 +118,21 @@ export default function PayrollPeriodPage({
 
         if (periodError) throw periodError;
 
-        setPeriod(periodData);
+        const validPeriodStatuses = ["draft", "cancelled", "completed", "processing"] as const;
+        type ValidPeriodStatus = typeof validPeriodStatuses[number];
+
+        const transformedPeriod: PayrollPeriod = {
+          id: periodData.id,
+          user_id: periodData.user_id,
+          start_date: periodData.start_date,
+          end_date: periodData.end_date,
+          status: validPeriodStatuses.includes(periodData.status as any)
+            ? (periodData.status as ValidPeriodStatus)
+            : "draft",
+          created_at: periodData.created_at,
+          updated_at: periodData.updated_at,
+        };
+        setPeriod(transformedPeriod);
 
         // Fetch active employees
         const { data: employeesData, error: employeesError } = await supabase
@@ -105,18 +143,62 @@ export default function PayrollPeriodPage({
 
         if (employeesError) throw employeesError;
 
-        setEmployees(employeesData || []);
+        const transformedEmployees: Employee[] = (employeesData || []).map(
+          (empData: any) => {
+            const validEmployeeStatuses = ["active", "inactive"] as const;
+            type ValidEmployeeStatus = typeof validEmployeeStatuses[number];
+            return {
+              id: empData.id,
+              user_id: empData.user_id,
+              first_name: empData.first_name ?? "",
+              last_name: empData.last_name ?? "",
+              email: empData.email ?? "",
+              phone: empData.phone ?? "N/A",
+              hire_date: empData.hire_date ?? new Date().toISOString(),
+              salary: empData.salary ?? 0,
+              status: validEmployeeStatuses.includes(empData.status as any)
+                ? (empData.status as ValidEmployeeStatus)
+                : "inactive",
+              department: empData.department ?? "",
+              position: empData.position ?? "",
+              created_at: empData.created_at,
+              updated_at: empData.updated_at,
+            };
+          }
+        );
+        setEmployees(transformedEmployees);
 
         // Fetch payslips for this period
         const { data: payslipsData, error: payslipsError } = await supabase
           .from("payslips")
           .select("*")
-          .eq("payroll_period_id", params.id)
+          .eq("pay_run_id", params.id)
           .eq("user_id", user.id);
 
         if (payslipsError) throw payslipsError;
 
-        setPayslips(payslipsData || []);
+        const transformedPayslips: Payslip[] = (payslipsData || []).map((pData: any) => {
+          const validPayslipStatuses = ["draft", "paid", "approved"] as const;
+          type ValidPayslipStatus = typeof validPayslipStatuses[number];
+          return {
+            id: pData.id,
+            user_id: pData.user_id,
+            employee_id: pData.employee_id,
+            pay_run_id: pData.pay_run_id,
+            period_start: pData.period_start,
+            period_end: pData.period_end,
+            payment_date: pData.payment_date,
+            gross_pay: pData.gross_pay ?? 0,
+            deductions: pData.deductions ?? 0,
+            net_pay: pData.net_pay ?? 0,
+            status: validPayslipStatuses.includes(pData.status as any)
+              ? (pData.status as ValidPayslipStatus)
+              : "draft",
+            created_at: pData.created_at,
+            updated_at: pData.updated_at,
+          } as Payslip;
+        });
+        setPayslips(transformedPayslips);
       } catch (error) {
         console.error("Error:", error);
         toast.error("Error loading payroll period");
@@ -224,16 +306,21 @@ export default function PayrollPeriodPage({
       if (periodError) throw periodError;
 
       // Generate payslips for all active employees
-      const payslipsToInsert: PayslipInsert[] = employees.map((employee) => ({
-        user_id: user.id,
-        employee_id: employee.id,
-        payroll_period_id: params.id,
-        base_salary: employee.salary / 12, // Monthly salary
-        gross_pay: employee.salary / 12,
-        deductions: 0, // You might want to calculate this based on your rules
-        net_pay: employee.salary / 12,
-        status: "draft",
-      }));
+      const payslipsToInsert: any[] = employees.map((employee) => {
+        const insertData = {
+          user_id: user.id,
+          employee_id: employee.id,
+          gross_pay: employee.salary / 12,
+          deductions: 0,
+          net_pay: employee.salary / 12,
+          status: "draft",
+          pay_run_id: params.id,
+          period_start: period!.start_date,
+          period_end: period!.end_date,
+          payment_date: new Date().toISOString(),
+        };
+        return insertData as any;
+      });
 
       const { error: payslipsError } = await supabase
         .from("payslips")
@@ -278,18 +365,19 @@ export default function PayrollPeriodPage({
       if (periodError) throw periodError;
 
       // Update all payslips to approved
-      const payslipUpdate: PayslipUpdate = {
-        status: "approved",
+      const payslipUpdate = {
+        status: "approved" as const,
         payment_date: new Date().toISOString(),
       };
 
-      const { error: payslipsError } = await supabase
+      const { error: payslipsErrorUpdate } = await supabase
         .from("payslips")
-        .update(payslipUpdate)
-        .eq("payroll_period_id", params.id)
-        .eq("user_id", user.id);
+        .update(payslipUpdate as any)
+        .eq("pay_run_id", params.id)
+        .eq("user_id", user.id)
+        .returns<void>();
 
-      if (payslipsError) throw payslipsError;
+      if (payslipsErrorUpdate) throw payslipsErrorUpdate;
 
       toast.success("Payroll completed successfully");
       router.refresh();
@@ -443,7 +531,6 @@ export default function PayrollPeriodPage({
                     <TableHeader>
                       <TableRow>
                         <TableHead>Employee</TableHead>
-                        <TableHead>Base Salary</TableHead>
                         <TableHead>Gross Pay</TableHead>
                         <TableHead>Deductions</TableHead>
                         <TableHead>Net Pay</TableHead>
@@ -469,9 +556,6 @@ export default function PayrollPeriodPage({
                                   {employee?.position}
                                 </span>
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              {formatAmount(payslip.base_salary)}
                             </TableCell>
                             <TableCell>
                               {formatAmount(payslip.gross_pay)}

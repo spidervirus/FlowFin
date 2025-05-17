@@ -12,7 +12,23 @@ type SetupStep = {
   description: string
 }
 
-type StepData = Database['public']['Tables']['organization_setup_progress']['Row']['step_data']
+// Define a more specific type for the structure within step_data JSON
+interface WizardStepData {
+  organization?: {
+    name: string;
+    website?: string | null;
+  };
+  profile?: {
+    fullName: string;
+    title: string; // This will be mapped to job_title in the profiles table
+  };
+  team?: {
+    invites: string[];
+  };
+  [key: string]: any; // Allow other dynamic properties if necessary
+}
+
+type StepData = WizardStepData; // Use the more specific type for state
 type SetupProgressRecord = Database['public']['Tables']['organization_setup_progress']['Row']
 
 export const SETUP_STEPS: SetupStep[] = [
@@ -37,7 +53,7 @@ export function useSetupWizard() {
   const { user } = useAuth()
   const supabase = createClient()
   const [currentStep, setCurrentStep] = useState(1)
-  const [stepData, setStepData] = useState<StepData>({})
+  const [stepData, setStepData] = useState<StepData>({}) // Initialized as WizardStepData
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -52,6 +68,7 @@ export function useSetupWizard() {
         .rpc('get_or_create_setup_progress', {
           user_id_param: user.id
         })
+        .single<SetupProgressRecord>() // Expect a single record
 
       if (rpcError) {
         throw rpcError
@@ -62,7 +79,7 @@ export function useSetupWizard() {
       }
 
       setCurrentStep(data.current_step)
-      setStepData(data.step_data)
+      setStepData(data.step_data as WizardStepData) // Cast to WizardStepData
     } catch (err) {
       console.error('Error loading setup progress:', err)
       const errorMessage = err instanceof PostgrestError 
@@ -78,13 +95,13 @@ export function useSetupWizard() {
 
   const saveProgress = useCallback(async (
     step: number,
-    data: Partial<StepData>
+    data: Partial<WizardStepData> // Parameter data is also WizardStepData
   ) => {
     if (!user) return
 
     try {
       setError(null)
-      const newStepData = { ...stepData, ...data }
+      const newStepData: WizardStepData = { ...(stepData as WizardStepData), ...data } // Ensure types align for spread
 
       const { error } = await supabase
         .rpc('update_setup_progress', {
@@ -145,8 +162,9 @@ export function useSetupWizard() {
           .from('profiles')
           .upsert({
             user_id: user.id,
+            email: user.email!, // Add email
             full_name: stepData.profile.fullName,
-            title: stepData.profile.title,
+            job_title: stepData.profile.title, // Map title to job_title
           })
 
         if (profileError) throw profileError

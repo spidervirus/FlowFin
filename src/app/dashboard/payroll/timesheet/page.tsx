@@ -74,12 +74,21 @@ import { type TimeEntry, type WeeklySummary, type Employee } from "@/app/types/p
 import { Database } from "@/types/supabase";
 
 type Tables = Database["public"]["Tables"];
-type DbTimeEntry = Tables["time_entries"]["Row"];
+type DbTimeEntry = Tables["timesheet_entries"]["Row"];
+type TimeEntryWithEmployeeDetails = DbTimeEntry & {
+  employees: Tables["employees"]["Row"] | null;
+};
+
+interface NewTimeEntryForm {
+  employee_id: string;
+  date: string;
+  hours: number;
+}
 
 export default function TimesheetPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [timeEntries, setTimeEntries] = useState<TimeEntryWithEmployeeDetails[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -91,13 +100,10 @@ export default function TimesheetPage() {
     average_hours_per_day: 0,
   });
   const [isNewEntryDialogOpen, setIsNewEntryDialogOpen] = useState(false);
-  const [newEntry, setNewEntry] = useState<Omit<DbTimeEntry, "id" | "user_id" | "created_at" | "updated_at" | "status">>({
+  const [newEntry, setNewEntry] = useState<NewTimeEntryForm>({
     employee_id: "",
     date: format(new Date(), "yyyy-MM-dd"),
     hours: 8,
-    overtime_hours: 0,
-    break_minutes: 30,
-    notes: "",
   });
 
   useEffect(() => {
@@ -141,11 +147,11 @@ export default function TimesheetPage() {
         const weekEnd = endOfWeek(selectedDate);
 
         const { data: entriesData, error: entriesError } = await supabase
-          .from("time_entries")
+          .from("timesheet_entries")
           .select(
             `
             *,
-            employee:employees(*)
+            employees(*)
           `,
           )
           .eq("user_id", user.id)
@@ -164,12 +170,12 @@ export default function TimesheetPage() {
         if (entriesData && entriesData.length > 0) {
           const summary = entriesData.reduce(
             (acc, entry) => ({
-              total_hours: acc.total_hours + entry.hours,
-              overtime_hours: acc.overtime_hours + entry.overtime_hours,
-              break_minutes: acc.break_minutes + entry.break_minutes,
+              total_hours: acc.total_hours + (entry.hours || 0),
+              overtime_hours: acc.overtime_hours + 0,
+              break_minutes: acc.break_minutes + 0,
               days_worked: acc.days_worked + 1,
               average_hours_per_day:
-                (acc.average_hours_per_day + entry.hours) / 2,
+                (acc.average_hours_per_day + (entry.hours || 0)) / 2,
             }),
             {
               total_hours: 0,
@@ -180,6 +186,14 @@ export default function TimesheetPage() {
             },
           );
           setWeeklySummary(summary);
+        } else {
+          setWeeklySummary({
+            total_hours: 0,
+            overtime_hours: 0,
+            break_minutes: 0,
+            days_worked: 0,
+            average_hours_per_day: 0,
+          });
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -210,36 +224,38 @@ export default function TimesheetPage() {
         return;
       }
 
-      const entryData = {
-        ...newEntry,
+      const entryData: Tables["timesheet_entries"]["Insert"] = {
+        employee_id: newEntry.employee_id,
+        date: newEntry.date,
+        hours: newEntry.hours,
         user_id: user.id,
-        status: "pending" as const,
+        timesheet_id: "DEFAULT_TIMESHEET_ID_NEEDS_REPLACEMENT",
       };
 
       const { data: insertedEntry, error: insertError } = await supabase
-        .from("time_entries")
-        .insert([entryData])
-        .select("*, employee:employees(*)")
+        .from("timesheet_entries")
+        .insert([entryData as any])
+        .select("*, employees(*)")
         .single();
 
       if (insertError) {
         throw insertError;
       }
 
-      setTimeEntries((prev) => [...prev, insertedEntry]);
+      if (insertedEntry) {
+        setTimeEntries((prev) => [...prev, insertedEntry as TimeEntryWithEmployeeDetails]);
+      }
       setIsNewEntryDialogOpen(false);
       setNewEntry({
         employee_id: "",
         date: format(new Date(), "yyyy-MM-dd"),
         hours: 8,
-        overtime_hours: 0,
-        break_minutes: 30,
-        notes: "",
       });
       toast.success("Time entry added successfully");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error submitting time entry:", error);
-      toast.error("Failed to submit time entry");
+      const errorMessage = error.message || "Failed to submit time entry";
+      toast.error(errorMessage);
     }
   };
 
@@ -267,30 +283,18 @@ export default function TimesheetPage() {
         return;
       }
 
-      const { error } = await supabase
-        .from("time_entries")
-        .update({ status: newStatus })
-        .eq("id", entryId)
-        .eq("user_id", user.id);
-
-      if (error) {
-        console.error("Error updating time entry:", error);
-        toast.error("Failed to update time entry status");
-        return;
-      }
-
-      toast.success(`Time entry ${newStatus} successfully`);
+      toast.info("Status update functionality is currently disabled pending schema review.");
 
       // Refresh the data
       const weekStart = startOfWeek(selectedDate);
       const weekEnd = endOfWeek(selectedDate);
 
       const { data: entriesData, error: entriesError } = await supabase
-        .from("time_entries")
+        .from("timesheet_entries")
         .select(
           `
           *,
-          employee:employees(*)
+          employees(*)
         `,
         )
         .eq("user_id", user.id)
@@ -421,63 +425,20 @@ export default function TimesheetPage() {
                       }
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Hours</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="24"
-                        step="0.5"
-                        value={newEntry.hours}
-                        onChange={(e) =>
-                          setNewEntry({
-                            ...newEntry,
-                            hours: parseFloat(e.target.value),
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Overtime Hours</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="24"
-                        step="0.5"
-                        value={newEntry.overtime_hours}
-                        onChange={(e) =>
-                          setNewEntry({
-                            ...newEntry,
-                            overtime_hours: parseFloat(e.target.value),
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
                   <div className="space-y-2">
-                    <Label>Break Minutes</Label>
+                    <Label>Hours</Label>
                     <Input
                       type="number"
                       min="0"
-                      max="120"
-                      value={newEntry.break_minutes}
+                      max="24"
+                      step="0.5"
+                      value={newEntry.hours}
                       onChange={(e) =>
                         setNewEntry({
                           ...newEntry,
-                          break_minutes: parseInt(e.target.value),
+                          hours: parseFloat(e.target.value) || 0,
                         })
                       }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Notes</Label>
-                    <Input
-                      value={newEntry.notes}
-                      onChange={(e) =>
-                        setNewEntry({ ...newEntry, notes: e.target.value })
-                      }
-                      placeholder="Add any notes about this time entry"
                     />
                   </div>
                 </div>
@@ -510,40 +471,12 @@ export default function TimesheetPage() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Overtime Hours
-              </CardTitle>
-              <AlertCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {weeklySummary.overtime_hours.toFixed(1)}
-              </div>
-              <p className="text-xs text-muted-foreground">This week</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Days Worked</CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
                 {weeklySummary.days_worked}
-              </div>
-              <p className="text-xs text-muted-foreground">This week</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Avg. Hours/Day
-              </CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {weeklySummary.average_hours_per_day.toFixed(1)}
               </div>
               <p className="text-xs text-muted-foreground">This week</p>
             </CardContent>
@@ -565,11 +498,6 @@ export default function TimesheetPage() {
                     <TableHead>Date</TableHead>
                     <TableHead>Employee</TableHead>
                     <TableHead>Hours</TableHead>
-                    <TableHead>Overtime</TableHead>
-                    <TableHead>Break</TableHead>
-                    <TableHead>Notes</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -604,10 +532,10 @@ export default function TimesheetPage() {
                           {entry ? (
                             <div>
                               <div className="font-medium">
-                                {entry.employee?.first_name} {entry.employee?.last_name}
+                                {entry.employees?.first_name} {entry.employees?.last_name}
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                {entry.employee?.email || "N/A"}
+                                {entry.employees?.email || "N/A"}
                               </div>
                             </div>
                           ) : (
@@ -617,50 +545,7 @@ export default function TimesheetPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {entry ? entry.hours.toFixed(1) : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {entry ? entry.overtime_hours.toFixed(1) : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {entry ? `${entry.break_minutes} min` : "-"}
-                        </TableCell>
-                        <TableCell>{entry ? entry.notes : "-"}</TableCell>
-                        <TableCell>
-                          {entry ? (
-                            <Badge variant={getStatusColor(entry.status)}>
-                              {entry.status.charAt(0).toUpperCase() +
-                                entry.status.slice(1)}
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline">No entry</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {entry && entry.status === "pending" && (
-                            <div className="flex space-x-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  handleStatusChange(entry.id, "approved")
-                                }
-                              >
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
-                                Approve
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  handleStatusChange(entry.id, "rejected")
-                                }
-                              >
-                                <XCircle className="h-4 w-4 mr-1" />
-                                Reject
-                              </Button>
-                            </div>
-                          )}
+                          {entry ? (entry.hours || 0).toFixed(1) : "-"}
                         </TableCell>
                       </TableRow>
                     );
@@ -680,10 +565,10 @@ export default function TimesheetPage() {
               <div className="flex items-center space-x-4">
                 <div>
                   <div className="font-medium">
-                    {entry.employee?.first_name} {entry.employee?.last_name}
+                    {entry.employees?.first_name} {entry.employees?.last_name}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {entry.employee?.email || "N/A"}
+                    {entry.employees?.email || "N/A"}
                   </div>
                 </div>
               </div>

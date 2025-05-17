@@ -62,7 +62,7 @@ export default function LeaveRequestsPage() {
   const [newRequest, setNewRequest] = useState<Omit<DbLeaveRequest, "id">>({
     user_id: "",
     employee_id: "",
-    type: "annual",
+    leave_type: "annual",
     start_date: "",
     end_date: "",
     status: "pending",
@@ -118,19 +118,26 @@ export default function LeaveRequestsPage() {
         // Fetch leave balances for each employee
         const balances: Record<string, LeaveBalance> = {};
         for (const employee of employeesData || []) {
-          const { data: balanceData } = await supabase
+          const { data: allBalanceRowsForEmployee, error: balanceFetchError } = await supabase
             .from("leave_balances")
-            .select("*")
-            .eq("employee_id", employee.id)
-            .single();
+            .select("leave_type, remaining_days")
+            .eq("employee_id", employee.id);
 
-          if (balanceData) {
-            balances[employee.id] = {
-              annual: balanceData.annual_leave_balance,
-              sick: balanceData.sick_leave_balance,
-              unpaid: balanceData.unpaid_leave_balance,
-            };
+          const currentEmployeeBalances: LeaveBalance = { annual: 0, sick: 0, unpaid: 0 };
+          if (balanceFetchError) {
+            console.error(`Error fetching balances for ${employee.id}:`, balanceFetchError);
+          } else if (allBalanceRowsForEmployee) {
+            allBalanceRowsForEmployee.forEach((row: any) => {
+              if (row.leave_type === 'annual') {
+                currentEmployeeBalances.annual = row.remaining_days || 0;
+              } else if (row.leave_type === 'sick') {
+                currentEmployeeBalances.sick = row.remaining_days || 0;
+              } else if (row.leave_type === 'unpaid') {
+                currentEmployeeBalances.unpaid = row.remaining_days || 0;
+              }
+            });
           }
+          balances[employee.id] = currentEmployeeBalances;
         }
         setLeaveBalances(balances);
       } catch (error) {
@@ -174,7 +181,7 @@ export default function LeaveRequestsPage() {
       setNewRequest({
         user_id: "",
         employee_id: "",
-        type: "annual",
+        leave_type: "annual",
         start_date: "",
         end_date: "",
         status: "pending",
@@ -350,9 +357,9 @@ export default function LeaveRequestsPage() {
                 <div className="space-y-2">
                   <Label>Leave Type</Label>
                   <Select
-                    value={newRequest.type}
-                    onValueChange={(value: LeaveType) =>
-                      setNewRequest({ ...newRequest, type: value })
+                    value={newRequest.leave_type}
+                    onValueChange={(value: string) =>
+                      setNewRequest({ ...newRequest, leave_type: value as LeaveType })
                     }
                   >
                     <SelectTrigger>
@@ -451,9 +458,9 @@ export default function LeaveRequestsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getLeaveTypeColor(request.type)}>
-                        {request.type.charAt(0).toUpperCase() +
-                          request.type.slice(1)}
+                      <Badge variant={getLeaveTypeColor(request.leave_type)}>
+                        {request.leave_type.charAt(0).toUpperCase() +
+                          request.leave_type.slice(1)}
                       </Badge>
                     </TableCell>
                     <TableCell>

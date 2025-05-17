@@ -59,7 +59,7 @@ export function AccountForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: initialData.name,
-      type: initialData.type,
+      type: initialData.type as "checking" | "savings" | "credit" | "investment" | "cash" | "other",
       balance: initialData.balance,
       currency: initialData.currency,
       institution: initialData.institution,

@@ -127,7 +127,7 @@ export default function EmployeePage({ params }: { params: { id: string } }) {
           department: data.department || null,
           salary: data.salary.toString(),
           hire_date: data.hire_date,
-          status: data.status,
+          status: (data.status === "active" || data.status === "inactive") ? data.status : "inactive",
         });
       } catch (error) {
         console.error("Error:", error);

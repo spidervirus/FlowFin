@@ -60,7 +60,32 @@ export default function CustomersPage() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setCustomers(data || []);
+      // Explicitly map each customer object to the Customer type
+      const typedCustomers = (data || []).map(customer => ({
+        id: customer.id,
+        user_id: customer.user_id,
+        name: customer.company_name || "Unnamed Customer", // Map company_name to name, remove customer.name
+        email: customer.email,
+        phone: customer.phone,
+        billing_address_line1: customer.billing_address_line1,
+        billing_address_line2: customer.billing_address_line2,
+        billing_city: customer.billing_city,
+        billing_state_province: customer.billing_state_province,
+        billing_postal_code: customer.billing_postal_code,
+        billing_country: customer.billing_country,
+        shipping_address_line1: customer.shipping_address_line1,
+        shipping_address_line2: customer.shipping_address_line2,
+        shipping_city: customer.shipping_city,
+        shipping_state_province: customer.shipping_state_province,
+        shipping_postal_code: customer.shipping_postal_code,
+        shipping_country: customer.shipping_country,
+        tax_id: customer.tax_id,
+        notes: customer.notes,
+        is_active: customer.is_active === undefined ? true : customer.is_active, // Default true
+        created_at: customer.created_at,
+        updated_at: customer.updated_at,
+      }));
+      setCustomers(typedCustomers);
     } catch (error) {
       console.error("Error fetching customers:", error);
       toast.error("Failed to load customers");

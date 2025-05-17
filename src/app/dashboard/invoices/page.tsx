@@ -99,9 +99,9 @@ export default function InvoicesPage() {
         } else {
           // Transform the data to match our Invoice interface
           const formattedInvoices: Invoice[] = (invoicesData || []).map(
-            (invoice) => ({
+            (invoice: any) => ({
               id: invoice.id,
-              client: invoice.client_name,
+              client: invoice.customer_name || invoice.customer_id || "Unknown Client",
               date: invoice.date,
               dueDate: invoice.due_date,
               amount: invoice.total_amount,

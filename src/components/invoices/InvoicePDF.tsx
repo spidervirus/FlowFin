@@ -1,9 +1,35 @@
 import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
-import { Invoice } from '@/types/invoices';
+// import { Invoice } from '@/types/invoices'; // Keep original import for reference or if it should be used
 import { formatCurrency } from '@/lib/utils';
 
+// Define a more inclusive Invoice type for this component's props
+interface PDFInvoiceType {
+  invoice_number: string;
+  date: string | Date;
+  due_date: string | Date;
+  client_name?: string;
+  client_email?: string;
+  client_address?: string;
+  items?: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+    amount: number;
+  }>;
+  subtotal: number;
+  tax_amount?: number;
+  tax_rate?: number;
+  discount_amount?: number;
+  total_amount: number;
+  notes?: string;
+  payment_terms?: string;
+  // Include other fields from the original Invoice type that are used, if known
+  // For example, if the linter showed other base fields, they should be here too.
+  [key: string]: any; // Allow other properties to avoid breaking if base Invoice type is richer
+}
+
 interface InvoicePDFProps {
-  invoice: Invoice;
+  invoice: PDFInvoiceType; // Use the locally defined inclusive type
   companyInfo: {
     name: string;
     address: string;
@@ -103,12 +129,14 @@ export function InvoicePDF({ invoice, companyInfo }: InvoicePDFProps) {
         </View>
 
         {/* Bill To */}
-        <View style={styles.section}>
-          <Text style={styles.bold}>Bill To:</Text>
-          <Text>{invoice.client_name}</Text>
-          <Text>{invoice.client_email}</Text>
-          <Text>{invoice.client_address}</Text>
-        </View>
+        {(invoice.client_name || invoice.client_email || invoice.client_address) && (
+          <View style={styles.section}>
+            <Text style={styles.bold}>Bill To:</Text>
+            {invoice.client_name && <Text>{invoice.client_name}</Text>}
+            {invoice.client_email && <Text>{invoice.client_email}</Text>}
+            {invoice.client_address && <Text>{invoice.client_address}</Text>}
+          </View>
+        )}
 
         {/* Items Table */}
         <View style={styles.section}>
@@ -118,7 +146,7 @@ export function InvoicePDF({ invoice, companyInfo }: InvoicePDFProps) {
             <Text style={styles.col2}>Unit Price</Text>
             <Text style={styles.col2}>Amount</Text>
           </View>
-          {invoice.items.map((item, index) => (
+          {(invoice.items || []).map((item: any, index: number) => (
             <View key={index} style={styles.row}>
               <Text style={styles.col4}>{item.description}</Text>
               <Text style={styles.col1}>{item.quantity}</Text>
@@ -134,16 +162,16 @@ export function InvoicePDF({ invoice, companyInfo }: InvoicePDFProps) {
             <Text style={styles.totalLabel}>Subtotal:</Text>
             <Text style={styles.totalValue}>{formatCurrency(invoice.subtotal)}</Text>
           </View>
-          {invoice.tax_amount > 0 && (
+          {(invoice.tax_amount ?? 0) > 0 && (
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Tax ({invoice.tax_rate}%):</Text>
-              <Text style={styles.totalValue}>{formatCurrency(invoice.tax_amount)}</Text>
+              <Text style={styles.totalValue}>{formatCurrency(invoice.tax_amount ?? 0)}</Text>
             </View>
           )}
-          {invoice.discount_amount > 0 && (
+          {(invoice.discount_amount ?? 0) > 0 && (
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Discount:</Text>
-              <Text style={styles.totalValue}>-{formatCurrency(invoice.discount_amount)}</Text>
+              <Text style={styles.totalValue}>-{formatCurrency(invoice.discount_amount ?? 0)}</Text>
             </View>
           )}
           <View style={[styles.totalRow, styles.bold]}>

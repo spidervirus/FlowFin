@@ -51,7 +51,7 @@ interface CompanySettings {
   company_name: string;
   default_currency: string;
   address?: string;
-  country: string;
+  country?: string;
   fiscal_year_start: string;
   industry?: string;
   created_at: string;
@@ -135,7 +135,24 @@ export default function NewJournalEntryPage() {
           throw settingsError;
         }
 
-        setSettings(settingsData);
+        // Transform settingsData before setting state
+        if (settingsData) {
+          const transformedSettings: CompanySettings = {
+            id: settingsData.id,
+            user_id: settingsData.user_id,
+            company_name: settingsData.company_name ?? "N/A",
+            default_currency: settingsData.default_currency ?? "USD",
+            address: (settingsData as any).address ?? undefined,
+            country: (settingsData as any).country ?? undefined, // Handle potentially missing country
+            fiscal_year_start: settingsData.fiscal_year_start ?? "",
+            industry: (settingsData as any).industry ?? undefined,
+            created_at: settingsData.created_at ?? "",
+            updated_at: settingsData.updated_at ?? "",
+          };
+          setSettings(transformedSettings);
+        } else {
+          setSettings(null); // Or a default CompanySettings object
+        }
 
         // Generate next reference number
         const { data: lastJournal, error: journalError } = await supabase

@@ -15,7 +15,16 @@ import { FinancialGoal } from "@/types/financial";
 import type { Database } from "@/app/types/supabase";
 
 interface CompanySettings {
+  id: string;
+  user_id: string;
+  company_name?: string;
   default_currency: CurrencyCode;
+  address?: string;
+  country?: string;
+  fiscal_year_start?: string;
+  industry?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 type DbFinancialGoal = Database["public"]["Tables"]["financial_goals"]["Row"] & {
@@ -59,9 +68,25 @@ export default function GoalsPage() {
           return;
         }
 
-        setSettings(settingsData);
-        if (settingsData?.default_currency) {
-          setCurrency(settingsData.default_currency as CurrencyCode);
+        if (settingsData) {
+          const transformedSettings: CompanySettings = {
+            id: settingsData.id,
+            user_id: settingsData.user_id,
+            company_name: settingsData.company_name ?? "N/A",
+            default_currency: (settingsData.default_currency as CurrencyCode) ?? "USD",
+            address: (settingsData as any).address ?? undefined,
+            country: (settingsData as any).country ?? undefined,
+            fiscal_year_start: (settingsData as any).fiscal_year_start ?? undefined,
+            industry: (settingsData as any).industry ?? undefined,
+            created_at: (settingsData as any).created_at ?? undefined,
+            updated_at: (settingsData as any).updated_at ?? undefined,
+          };
+          setSettings(transformedSettings);
+          // Use the transformed and validated currency
+          setCurrency(transformedSettings.default_currency);
+        } else {
+          setSettings(null);
+          setCurrency("USD"); // Default if no settings
         }
 
         // Fetch active goals with categories and contributions

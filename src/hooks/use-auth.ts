@@ -27,11 +27,12 @@ export function useAuth() {
   const initialMountRef = useRef(false)
   const sessionInitialized = useRef(false)
   const currentSession = useRef<Session | null>(null)
-  const supabaseClient = useRef<SupabaseClient<Database>>(
+  const supabaseClient = useRef<SupabaseClient<Database, "public">>(
     createClientComponentClient<Database>({
       cookieOptions: {
         name: `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/(?:db|api)\.([^.]+)\.supabase\./)?.[1] ?? 'default'}-auth-token`,
         path: '/',
+        domain: typeof window !== 'undefined' ? window.location.hostname : undefined,
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
       }

@@ -35,7 +35,6 @@ import type { Database } from "@/types/supabase";
 
 type Account = Database["public"]["Tables"]["chart_of_accounts"]["Row"];
 type ManualJournal = Database["public"]["Tables"]["manual_journals"]["Row"];
-type ManualJournalEntry = Database["public"]["Tables"]["manual_journal_entries"]["Row"];
 
 interface JournalEntry extends Omit<ManualJournal, "id"> {
   id: string;
@@ -47,8 +46,30 @@ interface JournalEntry extends Omit<ManualJournal, "id"> {
   }>;
 }
 
-interface RawJournalData extends ManualJournal {
-  entries: ManualJournalEntry[];
+interface RawJournalData extends Omit<ManualJournal, 'entries' /* if 'entries' exists on ManualJournal with a conflicting type */ > {
+  // Explicitly list all fields from ManualJournal that are selected by '*' in the query
+  // and ensure their types match ManualJournal's definition.
+  id: string; // from ManualJournal
+  user_id: string; // from ManualJournal
+  date: string; // from ManualJournal
+  reference_number: string | null; // from ManualJournal
+  description: string | null; // from ManualJournal
+  status: "draft" | "posted"; // from ManualJournal, ensure this matches its actual type
+  created_at: string; // from ManualJournal
+  updated_at: string; // from ManualJournal
+  // This 'entries' comes from the relational join in the query
+  entries: ManualJournalEntry[]; 
+}
+
+interface ManualJournalEntry {
+  id: string;
+  journal_id: string;
+  account_id: string;
+  description: string | null;
+  debit_amount: number | null;
+  credit_amount: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function JournalEntryPage({
@@ -111,7 +132,7 @@ export default function JournalEntryPage({
           status: journalData.status,
           created_at: journalData.created_at,
           updated_at: journalData.updated_at,
-          entries: (journalData.entries || []).map((entry: ManualJournalEntry) => ({
+          entries: ((journalData as any).entries || []).map((entry: ManualJournalEntry) => ({
             account_id: entry.account_id,
             description: entry.description || "",
             debit: Number(entry.debit_amount) || 0,
@@ -128,9 +149,30 @@ export default function JournalEntryPage({
         if (accountsError) throw accountsError;
 
         // Create accounts lookup object
-        const accountsLookup = accountsData.reduce(
-          (acc: Record<string, Account>, account: Account) => {
-            acc[account.id] = account;
+        const accountsLookup = (accountsData || []).reduce(
+          (acc: Record<string, Account>, accountRaw: any) => {
+            const validTypes = ["asset", "liability", "equity", "revenue", "expense"] as const;
+            type AccountTypeEnum = typeof validTypes[number];
+            
+            let validatedAccountType: AccountTypeEnum = "asset";
+            if (accountRaw.type && validTypes.includes(accountRaw.type as any)) {
+              validatedAccountType = accountRaw.type as AccountTypeEnum;
+            }
+            
+            const transformedAccount: Account = {
+              id: accountRaw.id,
+              user_id: accountRaw.user_id,
+              code: accountRaw.code,
+              name: accountRaw.name,
+              type: validatedAccountType,
+              description: accountRaw.description ?? "",
+              parent_id: accountRaw.parent_id ?? undefined,
+              is_active: accountRaw.is_active ?? true,
+              created_at: accountRaw.created_at ?? "",
+              updated_at: accountRaw.updated_at ?? "",
+              currency: accountRaw.currency ?? "USD",
+            };
+            acc[transformedAccount.id] = transformedAccount;
             return acc;
           },
           {},

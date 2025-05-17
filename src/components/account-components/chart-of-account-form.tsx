@@ -53,12 +53,15 @@ export function ChartOfAccountForm({
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
 
+  const validFormTypes = ["asset", "liability", "equity", "revenue", "expense"] as const;
+  type FormAccountType = typeof validFormTypes[number];
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: initialData.name,
       code: initialData.code,
-      type: initialData.type,
+      type: validFormTypes.includes(initialData.type as any) ? initialData.type as FormAccountType : "asset",
       description: initialData.description,
       parent_id: initialData.parent_id,
       is_active: initialData.is_active,

@@ -109,8 +109,8 @@ export default function CustomerForm({
         return;
       }
 
-      const submissionData: Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'user_id'> & { user_id?: string } = {
-        name: formData.name,
+      const customerDataForDb = {
+        company_name: formData.name,
         email: formData.email || null,
         phone: formData.phone || null,
         billing_address_line1: formData.billing_address_line1 || null,
@@ -133,7 +133,7 @@ export default function CustomerForm({
       if (isEditing && customerId) {
         const { error } = await supabase
           .from("customers")
-          .update(submissionData)
+          .update(customerDataForDb)
           .eq("id", customerId)
           .eq("user_id", user.id);
 
@@ -141,7 +141,7 @@ export default function CustomerForm({
         toast.success("Customer updated successfully");
       } else {
         const { error } = await supabase.from("customers").insert({
-          ...submissionData,
+          ...customerDataForDb,
           user_id: user.id,
         });
 

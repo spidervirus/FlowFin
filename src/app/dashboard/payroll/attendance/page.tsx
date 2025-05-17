@@ -35,6 +35,7 @@ import { Plus, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { type AttendanceRecord, type CompanySettings, type Employee } from "@/app/types/payroll";
 import type { Database } from "@/types/supabase";
+import { CurrencyCode } from "@/lib/utils";
 
 type AttendanceWithEmployee = Database["public"]["Tables"]["attendance"]["Row"] & {
   employee: Database["public"]["Tables"]["employees"]["Row"];
@@ -47,6 +48,7 @@ export default function AttendancePage() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [currency, setCurrency] = useState<CurrencyCode>("USD");
 
   useEffect(() => {
     async function fetchData() {
@@ -71,8 +73,42 @@ export default function AttendancePage() {
 
         if (settingsError) {
           console.error("Error fetching company settings:", settingsError);
+          setSettings(null);
+          setCurrency("USD");
+        } else if (settingsData) {
+          const currencyFromDb = settingsData.default_currency;
+          const isValidCurrencyCode = (code: string | null | undefined): code is CurrencyCode => {
+            // Add all valid currency codes your CurrencyCode type supports
+            // This is a placeholder validation. Implement robust validation if necessary.
+            return !!code && ["USD", "EUR", "GBP", "CAD", "AUD"].includes(code); // Example codes
+          };
+
+          const ensuredCurrencyCode: CurrencyCode = isValidCurrencyCode(currencyFromDb) ? currencyFromDb : "USD";
+
+          const transformedSettings: CompanySettings = {
+            // Spread known properties from settingsData that match CompanySettings fields
+            id: settingsData.id,
+            user_id: settingsData.user_id,
+            company_name: settingsData.company_name || "",
+            address: settingsData.address || "",
+            phone_number: settingsData.phone_number || "",
+            default_currency: ensuredCurrencyCode, // Now explicitly CurrencyCode
+            company_size: (settingsData.company_size as CompanySettings['company_size'] | undefined) ?? "1-10",
+            industry: (settingsData.industry as CompanySettings['industry'] | undefined) ?? "Other",
+            fiscal_year_start: (settingsData.fiscal_year_start as CompanySettings['fiscal_year_start'] | undefined) ?? "01-01",
+            tax_year_start: (settingsData.tax_year_start as CompanySettings['tax_year_start'] | undefined) ?? "01-01",
+            created_at: settingsData.created_at,
+            updated_at: settingsData.updated_at,
+            organization_id: settingsData.organization_id,
+            // Add any other fields from CompanySettings that are in settingsData
+            // country: undefined, // Explicitly undefined if not present, or handle as per CompanySettings type
+          };
+
+          setSettings(transformedSettings);
+          setCurrency(transformedSettings.default_currency as CurrencyCode);
         } else {
-          setSettings(settingsData);
+          setSettings(null);
+          setCurrency("USD");
         }
 
         // Fetch active employees
@@ -84,7 +120,12 @@ export default function AttendancePage() {
 
         if (employeesError) throw employeesError;
 
-        setEmployees(employeesData || []);
+        const transformedEmployees = (employeesData || []).map(emp => ({
+          ...emp,
+          phone: (emp as any).phone ?? "",
+          status: (emp.status === "active" || emp.status === "inactive" ? emp.status : "inactive") as "active" | "inactive",
+        })) as Employee[];
+        setEmployees(transformedEmployees);
 
         // Fetch attendance records for the selected date
         const { data: attendanceData, error: attendanceError } = await supabase

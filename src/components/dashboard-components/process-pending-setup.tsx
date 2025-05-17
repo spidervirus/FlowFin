@@ -374,7 +374,7 @@ export default function ProcessPendingSetup() {
               0,
             );
 
-            const { error: budgetError } = await supabase.from("budgets")
+            const { error: budgetError } = await supabase.from("budgets" as any)
               .insert({
                 user_id: userId,
                 name: setupData.budget.name,
@@ -446,9 +446,9 @@ export default function ProcessPendingSetup() {
                 name: setupData.goal.name,
                 target_amount: setupData.goal.targetAmount,
                 current_amount: 0,
+                start_date: new Date().toISOString().split("T")[0],
                 target_date: goalDate.toISOString().split("T")[0],
                 category_id: categoryId,
-                status: "active",
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               });

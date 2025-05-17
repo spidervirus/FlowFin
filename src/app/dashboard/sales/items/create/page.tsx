@@ -20,14 +20,23 @@ export default function CreateItemPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not found");
 
+      if (!data.name) {
+        toast.error("Item name is required.");
+        setIsLoading(false);
+        return;
+      }
+
+      const itemToInsert = {
+        user_id: user.id,
+        name: data.name,
+        description: data.description,
+        unit_price: data.unit_price,
+        sku: data.sku,
+      };
+
       const { error } = await supabase
         .from("items")
-        .insert([
-          {
-            ...data,
-            user_id: user.id,
-          },
-        ]);
+        .insert([itemToInsert]);
 
       if (error) throw error;
 

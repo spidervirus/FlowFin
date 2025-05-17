@@ -144,19 +144,19 @@ export function useAsyncContent<T = any>(
   initialState: AsyncContentState = "loading"
 ) {
   const [state, setState] = useState<AsyncContentState>(initialState);
-  const [error, setError] = useState<string | Error | null>(null);
+  const [error, setInternalError] = useState<string | Error | null>(null);
   const [data, setData] = useState<T | null>(null);
   
   const setLoading = () => setState("loading");
   const setSuccess = (data: T) => {
     setState("success");
     setData(data);
-    setError(null);
+    setInternalError(null);
   };
   const setEmpty = () => setState("empty");
   const setError = (err: string | Error) => {
     setState("error");
-    setError(err);
+    setInternalError(err);
   };
   
   return {
@@ -169,7 +169,7 @@ export function useAsyncContent<T = any>(
     setError,
     reset: () => {
       setState("loading");
-      setError(null);
+      setInternalError(null);
       setData(null);
     }
   };

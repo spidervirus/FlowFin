@@ -120,21 +120,26 @@ export default function TimesheetsPage() {
         if (timesheetsError) throw timesheetsError;
 
         // Transform the data to match the Timesheet type
-        const transformedTimesheets = (timesheetsData || []).map((timesheet) => ({
+        const validTimesheetStatuses = ["draft", "approved", "rejected", "submitted"] as const;
+        type ValidTimesheetStatus = typeof validTimesheetStatuses[number];
+
+        const transformedTimesheets = (timesheetsData || []).map((timesheet: any) => ({
           id: timesheet.id,
           user_id: timesheet.user_id,
           employee_id: timesheet.employee_id,
           week_start: timesheet.week_start,
           week_end: timesheet.week_end,
-          status: timesheet.status,
-          total_hours: timesheet.total_hours,
-          overtime_hours: timesheet.overtime_hours,
-          regular_hours: timesheet.regular_hours,
+          status: validTimesheetStatuses.includes(timesheet.status as any) 
+                  ? timesheet.status as ValidTimesheetStatus 
+                  : "draft", // Default status
+          total_hours: timesheet.total_hours ?? 0, // Default to 0 if null/undefined
+          overtime_hours: timesheet.overtime_hours ?? 0, // Default to 0
+          regular_hours: timesheet.regular_hours ?? 0, // Default to 0
           created_at: timesheet.created_at,
           updated_at: timesheet.updated_at,
-          employee: timesheet.employee,
-          entries: timesheet.entries || []
-        }));
+          employee: timesheet.employee, // Assuming employee is correctly typed or handled by spread
+          entries: timesheet.entries || [] // Assuming entries is correctly typed or handled
+        } as Timesheet));
 
         setTimesheets(transformedTimesheets);
 
@@ -219,7 +224,27 @@ export default function TimesheetsPage() {
         .order("created_at", { ascending: false });
 
       if (timesheetsError) throw timesheetsError;
-      setTimesheets(timesheetsData || []);
+      
+      const validTimesheetStatusesRefresh = ["draft", "approved", "rejected", "submitted"] as const;
+      type ValidTimesheetStatusRefresh = typeof validTimesheetStatusesRefresh[number];
+      const refreshedTransformedTimesheets = (timesheetsData || []).map((timesheet: any) => ({
+        id: timesheet.id,
+        user_id: timesheet.user_id,
+        employee_id: timesheet.employee_id,
+        week_start: timesheet.week_start,
+        week_end: timesheet.week_end,
+        status: validTimesheetStatusesRefresh.includes(timesheet.status as any) 
+                ? timesheet.status as ValidTimesheetStatusRefresh 
+                : "draft",
+        total_hours: timesheet.total_hours ?? 0,
+        overtime_hours: timesheet.overtime_hours ?? 0,
+        regular_hours: timesheet.regular_hours ?? 0,
+        created_at: timesheet.created_at,
+        updated_at: timesheet.updated_at,
+        employee: timesheet.employee,
+        entries: timesheet.entries || []
+      } as Timesheet));
+      setTimesheets(refreshedTransformedTimesheets);
     } catch (error) {
       console.error("Error:", error);
       toast.error("Failed to create timesheet");
@@ -265,7 +290,27 @@ export default function TimesheetsPage() {
         .order("created_at", { ascending: false });
 
       if (timesheetsError) throw timesheetsError;
-      setTimesheets(timesheetsData || []);
+      
+      const validTimesheetStatusesUpdate = ["draft", "approved", "rejected", "submitted"] as const;
+      type ValidTimesheetStatusUpdate = typeof validTimesheetStatusesUpdate[number];
+      const updatedTransformedTimesheets = (timesheetsData || []).map((timesheet: any) => ({
+        id: timesheet.id,
+        user_id: timesheet.user_id,
+        employee_id: timesheet.employee_id,
+        week_start: timesheet.week_start,
+        week_end: timesheet.week_end,
+        status: validTimesheetStatusesUpdate.includes(timesheet.status as any) 
+                ? timesheet.status as ValidTimesheetStatusUpdate 
+                : "draft",
+        total_hours: timesheet.total_hours ?? 0,
+        overtime_hours: timesheet.overtime_hours ?? 0,
+        regular_hours: timesheet.regular_hours ?? 0,
+        created_at: timesheet.created_at,
+        updated_at: timesheet.updated_at,
+        employee: timesheet.employee,
+        entries: timesheet.entries || []
+      } as Timesheet));
+      setTimesheets(updatedTransformedTimesheets);
     } catch (error) {
       console.error("Error:", error);
       toast.error("Failed to update timesheet status");

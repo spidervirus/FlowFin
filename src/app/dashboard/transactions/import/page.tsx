@@ -86,6 +86,7 @@ export default function ImportTransactionsPage() {
       // Transform accounts data to match Account type
       const transformedAccounts: Account[] = (accountsData || []).map((account: DbAccount) => ({
         ...account,
+        type: account.type as Account["type"],
         currency: account.currency as CurrencyCode
       }));
 
@@ -102,7 +103,12 @@ export default function ImportTransactionsPage() {
         return;
       }
 
-      setCategories(categoriesData || []);
+      // Transform categories data to match Category type
+      const transformedCategories: Category[] = (categoriesData || []).map((category: DbCategory) => ({
+        ...category,
+        type: category.type as Category["type"],
+      }));
+      setCategories(transformedCategories);
 
       // Fetch existing transactions for auto-categorization
       const { data: transactionsData } = await supabase
@@ -118,14 +124,14 @@ export default function ImportTransactionsPage() {
           date: transaction.date,
           description: transaction.description,
           amount: transaction.amount,
-          type: transaction.type,
+          type: transaction.type as Transaction["type"],
           category_id: transaction.category_id || '',
           account_id: transaction.account_id,
-          status: transaction.status === 'reconciled' ? 'completed' : transaction.status,
+          status: transaction.status === 'reconciled' ? 'completed' : transaction.status as Transaction["status"],
           notes: transaction.notes || '',
           is_recurring: transaction.is_recurring || false,
-          recurrence_frequency: transaction.recurrence_frequency || undefined,
-          next_occurrence_date: transaction.next_occurrence_date || undefined,
+          recurrence_frequency: (transaction as any).recurrence_frequency || undefined,
+          next_occurrence_date: (transaction as any).next_occurrence_date || undefined,
           created_at: transaction.created_at,
           updated_at: transaction.updated_at,
           user_id: transaction.user_id

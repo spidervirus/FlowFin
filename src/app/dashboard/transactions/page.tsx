@@ -60,7 +60,7 @@ interface CompanySettings {
   id: string;
   company_name: string;
   address: string;
-  country: string;
+  country?: string | null;
   default_currency: CurrencyCode;
   fiscal_year_start: string;
   industry: string;
@@ -104,9 +104,9 @@ export default function TransactionsPage() {
       }
 
       if (settings) {
-        setCompanySettings(settings);
+        setCompanySettings(settings as CompanySettings);
         if (settings.default_currency) {
-          setCurrency(settings.default_currency);
+          setCurrency(settings.default_currency as CurrencyCode);
         }
       }
 
@@ -130,19 +130,36 @@ export default function TransactionsPage() {
         return;
       }
 
-      const transformedTransactions = (transactionsData || []).map(tx => ({
-        ...tx,
-        account: tx.account ? {
+      const transformedTransactions = (transactionsData || []).map(tx => {
+        const accountData = tx.account ? {
           name: tx.account.name,
-          type: tx.account.type,
-          currency: tx.account.currency,
-          code: tx.account.code,
-        } : null,
-        category: tx.category ? {
+          type: tx.account.type as string,
+          currency: tx.account.currency as string,
+          code: tx.account.code || null,
+        } : null;
+
+        const categoryData = tx.category ? {
           name: tx.category.name,
-          type: tx.category.type,
-        } : null,
-      }));
+          type: tx.category.type as "income" | "expense" | "transfer",
+        } : null;
+
+        return {
+          id: tx.id,
+          description: tx.description,
+          amount: tx.amount,
+          type: tx.type as Transaction["type"],
+          category_id: tx.category_id || null,
+          account_id: tx.account_id,
+          date: tx.date,
+          notes: tx.notes || null,
+          status: tx.status as Transaction["status"],
+          is_recurring: tx.is_recurring === undefined ? null : tx.is_recurring,
+          recurrence_frequency: (tx as any).recurrence_frequency as Transaction["recurrence_frequency"] || null,
+          next_occurrence_date: (tx as any).next_occurrence_date as string || null,
+          category: categoryData,
+          account: accountData,
+        };
+      });
 
       setTransactions(transformedTransactions as Transaction[]);
     } catch (error) {

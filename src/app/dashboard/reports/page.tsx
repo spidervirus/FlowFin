@@ -56,6 +56,9 @@ interface Category {
 }
 
 interface CompanySettings {
+  id: string;
+  user_id: string;
+  company_name: string | null;
   default_currency: CurrencyCode;
 }
 
@@ -96,12 +99,43 @@ export default function ReportsPage() {
         if (settingsError) {
           console.error("Error fetching company settings:", settingsError);
           toast.error("Failed to load company settings");
-          return;
-        }
+          // Set a default CompanySettings object or handle the absence of settings
+          const defaultSettings: CompanySettings = {
+            id: "default", // Provide appropriate default or generated ID
+            user_id: user?.id || "default_user", // Use actual user ID if available
+            company_name: "Default Company",
+            default_currency: "USD" as CurrencyCode, // Default currency
+          };
+          setSettings(defaultSettings);
+          setCurrency("USD" as CurrencyCode);
+          // Potentially return or decide if fetching categories/transactions should proceed without settings
+        } else if (settingsData) {
+          // Validate and transform settings
+          const isValidCurrency = settingsData.default_currency && 
+                                Object.keys(CURRENCY_CONFIG).includes(settingsData.default_currency);
 
-        setSettings(settingsData);
-        if (settingsData?.default_currency) {
-          setCurrency(settingsData.default_currency as CurrencyCode);
+          const finalCurrencyCode: CurrencyCode = isValidCurrency 
+            ? settingsData.default_currency as CurrencyCode 
+            : "USD"; // Default to USD if invalid or missing
+
+          const transformedSettings: CompanySettings = {
+            id: settingsData.id,
+            user_id: settingsData.user_id,
+            company_name: settingsData.company_name ?? null,
+            default_currency: finalCurrencyCode,
+          };
+          setSettings(transformedSettings);
+          setCurrency(finalCurrencyCode);
+        } else {
+           // Handle case where settingsData is null but no error (e.g., new user)
+           const defaultSettings: CompanySettings = {
+            id: "new_user_default",
+            user_id: user?.id || "default_user",
+            company_name: "My Company",
+            default_currency: "USD" as CurrencyCode,
+          };
+          setSettings(defaultSettings);
+          setCurrency("USD" as CurrencyCode);
         }
 
         // Fetch categories
@@ -117,7 +151,11 @@ export default function ReportsPage() {
           return;
         }
 
-        setCategories(categoriesData);
+        setCategories(categoriesData.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          type: (cat.type === "income" || cat.type === "expense") ? cat.type : "expense",
+        } as Category)));
 
         // Create a map of category IDs to names
         const categoryMap = categoriesData.reduce(
@@ -143,12 +181,22 @@ export default function ReportsPage() {
         }
 
         // Add category names to transactions
-        const transactionsWithCategories = transactionsData.map((transaction) => ({
+        const transactionsWithCategories = transactionsData.map((transaction: any) => ({
           ...transaction,
           category_name: transaction.category_id ? categoryMap[transaction.category_id] : "Uncategorized",
+          type: (transaction.type === "income" || transaction.type === "expense" || transaction.type === "transfer") 
+                ? transaction.type as Transaction['type'] 
+                : "expense",
+          status: (transaction.status === "pending" || transaction.status === "completed" || transaction.status === "reconciled")
+                  ? transaction.status as Transaction['status']
+                  : "pending",
+          recurrence_frequency: transaction.recurrence_frequency ?? null,
+          next_occurrence_date: transaction.next_occurrence_date ?? null,
+          is_recurring: transaction.is_recurring ?? null,
+          notes: transaction.notes ?? null,
         }));
 
-        setTransactions(transactionsWithCategories);
+        setTransactions(transactionsWithCategories as Transaction[]);
       } catch (error) {
         console.error("Error in fetchData:", error);
         toast.error("An error occurred while loading data");

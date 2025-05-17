@@ -180,15 +180,28 @@ export default function QuotesPage() {
       if (quoteError) throw quoteError;
 
       // Create invoice from quote
+      // Construct a specific payload for the invoice
+      // Ensure all fields are valid for the 'invoices' table schema
+      const invoicePayload = {
+        user_id: quote.user_id,
+        customer_id: quote.customer_id,
+        date: quote.quote_date,
+        invoice_number: `INV-${Date.now()}`.substring(0,15),
+        due_date: quote.expiry_date, 
+        status: "draft" as const,
+        subtotal: quote.subtotal,
+        discount_amount: quote.discount_amount,
+        tax_amount: quote.tax_amount,
+        total: quote.total,
+        terms: quote.terms,
+        notes: quote.notes,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(), 
+      };
+
       const { data: invoice, error: invoiceError } = await supabase
         .from("invoices")
-        .insert({
-          ...quote,
-          id: undefined,
-          quote_id: quoteId,
-          status: "draft",
-          created_at: new Date().toISOString(),
-        })
+        .insert(invoicePayload) // Use the constructed payload
         .select()
         .single();
 
