@@ -56,9 +56,9 @@ export function createClient(options: SupabaseClientOptions = {}) {
           if (!cookieStore) return null;
           const cookie = cookieStore.get(key);
           return cookie?.value ?? null;
-        },
+      },
         setItem(key: string, value: string) { // Supabase's setItem for storage typically doesn't pass full cookie options here
-          if (!cookieStore) return;
+        if (!cookieStore) return;
           // The 'key' here is usually the session object stringified.
           // The cookie name for the session is often standard (e.g., sb-access-token, sb-refresh-token) or configured by Supabase.
           // We use getAuthCookieName() for our primary auth token cookie.
@@ -71,17 +71,17 @@ export function createClient(options: SupabaseClientOptions = {}) {
             ...defaultCookieOptions 
             // Supabase might provide its own maxAge via different mechanisms or defaults for session/refresh tokens
           });
-        },
+      },
         removeItem(key: string) { // Similar to setItem, key identifies what to remove
-          if (!cookieStore) return;
+        if (!cookieStore) return;
           cookieStore.set({ 
             name: getAuthCookieName(), // Assuming key corresponds to our main auth cookie
             value: '', 
             ...defaultCookieOptions, 
             maxAge: 0 
           });
-        },
       },
+    },
     },
   });
   

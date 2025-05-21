@@ -244,8 +244,8 @@ export function getFormErrors(result: z.ZodFormattedError<any>): Record<string, 
     const fieldErrorObject = result[key as keyof typeof result];
     if (fieldErrorObject && typeof fieldErrorObject === 'object' && '_errors' in fieldErrorObject) {
       const messages = (fieldErrorObject as { _errors: string[] })._errors;
-      if (messages && messages.length > 0) {
-        errors[key] = messages[0];
+    if (messages && messages.length > 0) {
+      errors[key] = messages[0];
       }
     }
   }

@@ -156,38 +156,15 @@ export default function OrganizationSettings({
         .single()) as { data: CompanySettings | null; error: any };
 
       if (error) {
-        if (error.code === "PGRST116") {
-          // No settings found, create default settings
-          const { data: newSettings, error: createError } =
-            (await supabaseClient
-              .from("company_settings")
-              .insert({
-                user_id: userId,
-                company_name: "My Company",
-                address: "",  // Required field
-                country: "United States",
-                default_currency: "USD" as CurrencyCode,
-                fiscal_year_start: "01",
-                industry: "other",  // Required field
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              })
-              .select()
-              .single()) as { data: CompanySettings | null; error: any };
-
-          if (createError) throw createError;
-          if (newSettings) {
-            setFormData({
-              company_name: newSettings.company_name,
-              industry: newSettings.industry || "",
-              address: newSettings.address || "",
-              country: newSettings.country,
-              default_currency: newSettings.default_currency,
-              fiscal_year_start: newSettings.fiscal_year_start,
-            });
-          }
+        if (error.code !== "PGRST116") {
+          console.error("Error fetching settings:", error);
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Failed to load company settings",
+          });
         } else {
-          throw error;
+          console.warn("No company settings found for user.");
         }
       } else if (settings) {
         setFormData({
@@ -200,11 +177,11 @@ export default function OrganizationSettings({
         });
       }
     } catch (error) {
-      console.error("Error fetching settings:", error);
+      console.error("Unexpected error fetching settings:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to load company settings",
+        description: "An unexpected error occurred while loading settings",
       });
     } finally {
       setIsLoading(false);
@@ -238,23 +215,18 @@ export default function OrganizationSettings({
     setIsSubmitting(true);
 
     try {
-      const supabaseClient = createClient();
+      const response = await fetch('/api/dashboard/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
 
-      // Update company settings
-      const { error: settingsError } = await supabaseClient
-        .from("company_settings")
-        .update({
-          company_name: formData.company_name,
-          industry: formData.industry,
-          address: formData.address,
-          country: formData.country,
-          default_currency: formData.default_currency,
-          fiscal_year_start: formData.fiscal_year_start,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", initialUser.id);
-
-      if (settingsError) throw settingsError;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to save company settings');
+      }
 
       toast({
         title: "Success",
@@ -267,7 +239,7 @@ export default function OrganizationSettings({
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to update company settings",
+        description: error instanceof Error ? error.message : 'Failed to update company settings',
       });
     } finally {
       setIsSubmitting(false);

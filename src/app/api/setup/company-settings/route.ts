@@ -106,6 +106,9 @@ export async function POST(req: NextRequest) {
     const fiscalYearStartDate = formattedDate.toISOString().split("T")[0];
 
     // Create Supabase client
+    console.log("Creating Supabase service role client...");
+    console.log("Supabase URL available:", !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log("Supabase Service Role Key available:", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
     const supabaseAdmin = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -116,9 +119,11 @@ export async function POST(req: NextRequest) {
         },
       }
     );
+    console.log("Supabase service role client created.");
 
     try {
       // Start a transaction by using a single query
+      console.log("Attempting to create organization...");
       const { data: organization, error: orgError } = await supabaseAdmin
         .from("organizations")
         .insert({
@@ -130,8 +135,9 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (orgError) throw orgError;
+      console.log("Organization created successfully.", organization);
 
-      // Create company settings linked to the organization
+      console.log("Attempting to create company settings...", { user_id, organization_id: organization.id, company_name, default_currency, fiscal_year_start: fiscalYearStartDate, tax_year_start: fiscalYearStartDate });
       const { data: settings, error: settingsError } = await supabaseAdmin
         .from("company_settings")
         .insert({
@@ -148,8 +154,9 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (settingsError) throw settingsError;
+      console.log("Company settings created successfully.", settings);
 
-      // Create organization member record
+      console.log("Attempting to create organization member...", { user_id, organization_id: organization.id, role: 'owner' });
       const { error: memberError } = await supabaseAdmin
         .from("organization_members")
         .insert({
@@ -161,6 +168,7 @@ export async function POST(req: NextRequest) {
         });
 
       if (memberError) throw memberError;
+      console.log("Organization member created successfully.");
 
       // Return successful response
       return NextResponse.json(
@@ -179,7 +187,7 @@ export async function POST(req: NextRequest) {
       );
 
     } catch (dbError: any) {
-      console.error("Database operation failed:", dbError);
+      console.error("Caught database operation error in API:", dbError);
       return NextResponse.json(
         { 
           error: `Database error: ${dbError.message}`,

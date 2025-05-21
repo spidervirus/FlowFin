@@ -130,12 +130,12 @@ export function InvoicePDF({ invoice, companyInfo }: InvoicePDFProps) {
 
         {/* Bill To */}
         {(invoice.client_name || invoice.client_email || invoice.client_address) && (
-          <View style={styles.section}>
-            <Text style={styles.bold}>Bill To:</Text>
+        <View style={styles.section}>
+          <Text style={styles.bold}>Bill To:</Text>
             {invoice.client_name && <Text>{invoice.client_name}</Text>}
             {invoice.client_email && <Text>{invoice.client_email}</Text>}
             {invoice.client_address && <Text>{invoice.client_address}</Text>}
-          </View>
+        </View>
         )}
 
         {/* Items Table */}

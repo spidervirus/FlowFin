@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const redirect = requestUrl.searchParams.get("redirect") || "/dashboard";
+  const redirect = requestUrl.searchParams.get("redirect") || "/setup";
 
   if (!code) {
     return NextResponse.redirect(new URL("/sign-in", requestUrl.origin));

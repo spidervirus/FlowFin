@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
-      password,
+        password,
       options: {
         data: { 
           full_name: name,
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
       .from('profiles')
       .insert({
         id: data.user.id, // Assumes data.user is not null due to the check above
+        user_id: data.user.id, // Add user_id here
         full_name: name,
         email: email,
         // Add any other required fields for your profiles table here

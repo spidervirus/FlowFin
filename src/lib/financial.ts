@@ -738,9 +738,9 @@ export async function generateReport(
       return null; // Or some other way to filter it out later
     }
     return {
-      ...t,
-      category: t.category || null,
-      is_recurring: t.is_recurring || false,
+    ...t,
+    category: t.category || null,
+    is_recurring: t.is_recurring || false,
       recurrence_frequency: (t as any).recurrence_frequency as RecurrenceFrequency | null || null,
       next_occurrence_date: (t as any).next_occurrence_date as string | null || null,
     }
