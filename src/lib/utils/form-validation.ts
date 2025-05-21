@@ -232,10 +232,21 @@ export function validatePasswordStrength(password: string): {
 export function getFormErrors(result: z.ZodFormattedError<any>): Record<string, string> {
   const errors: Record<string, string> = {};
   
-  for (const key in result.fieldErrors) {
-    const messages = result.fieldErrors[key];
-    if (messages && messages.length > 0) {
-      errors[key] = messages[0];
+  // Handle form-level errors (optional, based on how you want to display them)
+  // if (result._errors.length) {
+  //   errors._form = result._errors.join(', '); 
+  // }
+
+  for (const key in result) {
+    if (key === '_errors') continue; // Skip the global errors array
+
+    // Assert that result[key] is an object with _errors (or skip if not)
+    const fieldErrorObject = result[key as keyof typeof result];
+    if (fieldErrorObject && typeof fieldErrorObject === 'object' && '_errors' in fieldErrorObject) {
+      const messages = (fieldErrorObject as { _errors: string[] })._errors;
+      if (messages && messages.length > 0) {
+        errors[key] = messages[0];
+      }
     }
   }
   

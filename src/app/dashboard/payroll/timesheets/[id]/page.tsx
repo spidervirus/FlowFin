@@ -74,7 +74,7 @@ type AugmentedTimesheetEntryInsert = Database["public"]["Tables"]["timesheet_ent
 
 type AugmentedTimesheetRow = Database["public"]["Tables"]["timesheets"]["Row"] & {
   total_hours: number;
-  overtime_hours: number;
+w  overtime_hours: number;
   regular_hours: number;
 };
 

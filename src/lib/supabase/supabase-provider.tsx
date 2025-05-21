@@ -21,8 +21,9 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [supabase] = react.useState(() => createClientComponentClient({
     cookieOptions: {
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/'
+      sameSite: 'lax' as const,
+      path: '/',
+      domain: isBrowser() ? window.location.hostname : undefined,
     }
   }));
   const [user, setUser] = react.useState<User | null>(null);
@@ -32,7 +33,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   react.useEffect(() => {
     // Set mounted flag
     isMounted.current = true;
-    let authListener: { subscription: { unsubscribe: () => void } } | null = null;
+    let authListener: { data: { subscription: { unsubscribe: () => void } } } | null = null;
 
     const getUser = async () => {
       try {
@@ -83,9 +84,9 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     // Clean up on unmount
     return () => {
       isMounted.current = false;
-      if (authListener?.subscription) {
+      if (authListener?.data?.subscription) {
         try {
-          authListener.subscription.unsubscribe();
+          authListener.data.subscription.unsubscribe();
         } catch (error) {
           console.error('Error unsubscribing from auth listener:', error);
         }

@@ -36,9 +36,9 @@ export async function POST(request: NextRequest) {
     
     const supabase = createClient();
     
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email,
-        password,
+      password,
       options: {
         data: { 
           full_name: name,
@@ -47,21 +47,30 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    if (error) {
-      return createApiResponse(null, error.message, 400);
+    if (signUpError) {
+      // It seems signups were not allowed before, but if that's fixed, other auth errors can occur
+      console.error('Supabase signUp error:', signUpError);
+      return createApiResponse(null, signUpError.message, signUpError.status || 400);
+    }
+
+    if (!data.user) {
+      console.error('Supabase signUp did not return a user object.');
+      return createApiResponse(null, 'User registration failed, no user object returned.', 500);
     }
 
     // Create user profile in the database
     const { error: profileError } = await supabase
       .from('profiles')
       .insert({
-        id: data.user?.id,
+        id: data.user.id, // Assumes data.user is not null due to the check above
         full_name: name,
         email: email,
+        // Add any other required fields for your profiles table here
       });
 
     if (profileError) {
-      return createApiResponse(null, 'Failed to create user profile', 500);
+      console.error('Supabase profile creation error:', profileError); // Log the detailed error
+      return createApiResponse(null, `Profile creation failed: ${profileError.message}`, 500); // Return detailed error
     }
 
     // Set secure cookies if needed (fallback to basic cookie setting)

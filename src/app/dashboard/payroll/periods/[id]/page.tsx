@@ -92,16 +92,16 @@ export default function PayrollPeriodPage({
             user_id: fetchedSettings.user_id,
             company_name: fetchedSettings.company_name ?? "N/A",
             address: fetchedSettings.address ?? "Default Address",
-            country: fetchedSettings.country ?? "US",
+            // country: fetchedSettings.country ?? "US", // country is not part of the CompanySettings type from DB
             default_currency: (fetchedSettings.default_currency as CurrencyCode) ?? "USD",
             fiscal_year_start: fetchedSettings.fiscal_year_start ?? "01-01",
             industry: fetchedSettings.industry ?? "General",
             phone_number: fetchedSettings.phone_number ?? "N/A",
             company_size: fetchedSettings.company_size ?? "1-10",
+            organization_id: fetchedSettings.organization_id ?? null, // Add organization_id, ensure nullable if appropriate for CompanySettings type
+            tax_year_start: fetchedSettings.tax_year_start ?? null, // Add tax_year_start, ensure nullable if appropriate for CompanySettings type
             created_at: fetchedSettings.created_at,
             updated_at: fetchedSettings.updated_at,
-            // Add any other fields EXPLICITLY that your local CompanySettings type defines
-            // but might not be in the settingsData object from an old supabase.ts
           };
           setSettings(transformedSettings);
         } else {

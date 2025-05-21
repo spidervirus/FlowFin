@@ -424,7 +424,8 @@ export async function getAccounts() {
     .order("name");
 
   if (error) throw new FinancialError("Failed to fetch accounts", error);
-  return data as Account[];
+  // Add balance: 0 to each account object from chart_of_accounts
+  return (data || []).map(acc => ({ ...acc, balance: 0 })) as Account[];
 }
 
 export async function getAccountById(id: string) {
@@ -443,20 +444,24 @@ export async function getAccountById(id: string) {
     }
     throw new FinancialError("Failed to fetch account by ID", error);
   }
-  return data as Account | null;
+  // Add balance: 0 to the account object from chart_of_accounts
+  return data ? { ...data, balance: 0 } as Account : null;
 }
 
 export async function createAccount(
-  account: Omit<Account, "id" | "created_at" | "updated_at"> & { user_id: string }
+  account: Omit<Account, "id" | "created_at" | "updated_at" | "balance"> & { user_id: string; code?: string; } 
 ) {
-  const { id, ...accountData } = account as Account;
+  const { id, balance, ...accountData } = account as Account; 
 
   const { data, error } = await getClient()
     .from("chart_of_accounts")
     .insert([
       {
         ...accountData,
-        balance: accountData.balance || 0,
+        code: accountData.code || accountData.name.substring(0, 3).toUpperCase() + Math.floor(Math.random()*100), 
+        name: accountData.name,
+        type: accountData.type,
+        user_id: accountData.user_id,
         currency: accountData.currency || "USD",
         is_active: accountData.is_active ?? true,
       },
@@ -465,10 +470,11 @@ export async function createAccount(
     .single();
 
   if (error) throw new FinancialError("Failed to create account", error);
-  return data as Account;
+  // Add balance: 0 to the returned account object to satisfy the Account type
+  return { ...data, balance: 0 } as Account; 
 }
 
-export async function updateAccount(id: string, updates: Partial<Omit<Account, "id" | "user_id" | "created_at">>) {
+export async function updateAccount(id: string, updates: Partial<Omit<Account, "id" | "user_id" | "created_at" | "balance">>) { 
   if (!id) {
     throw new FinancialError("Account ID is required for updates.");
   }
@@ -704,7 +710,7 @@ export async function generateReport(
   endDate: string,
   filter: ReportFilter = {},
 ): Promise<ReportData> {
-  const { data: transactions, error } = await getClient()
+  const { data: fetchedTransactions, error } = await getClient()
     .from("transactions")
     .select(`
       *,
@@ -712,21 +718,33 @@ export async function generateReport(
         id,
         name,
         type,
-        color
+        color,
+        user_id,
+        is_active,
+        updated_at
       )
     `)
     .gte("date", startDate)
     .lte("date", endDate);
 
-  if (error) throw new FinancialError("Failed to fetch transactions", error);
-  if (!transactions) throw new FinancialError("No transactions found");
+  if (error) throw new FinancialError("Failed to fetch transactions for report", error);
+  if (!fetchedTransactions) throw new FinancialError("No transactions data returned for report");
 
-  // Cast the transactions to ensure correct typing
-  const typedTransactions = transactions.map(t => ({
-    ...t,
-    category: t.category || null,
-    is_recurring: t.is_recurring || false,
-  })) as Transaction[];
+  // Ensure each transaction object is valid before processing
+  const typedTransactions = fetchedTransactions.map(t => {
+    // Check if t itself is an error-like structure, though Supabase usually puts errors in the 'error' object
+    if (!t || typeof t !== 'object' || t.id === undefined) { 
+      console.warn("Skipping invalid transaction object in report:", t);
+      return null; // Or some other way to filter it out later
+    }
+    return {
+      ...t,
+      category: t.category || null,
+      is_recurring: t.is_recurring || false,
+      recurrence_frequency: (t as any).recurrence_frequency as RecurrenceFrequency | null || null,
+      next_occurrence_date: (t as any).next_occurrence_date as string | null || null,
+    }
+  }).filter(Boolean) as Transaction[]; // Filter out any nulls and cast
 
   const incomeTransactions = typedTransactions.filter(t => t.type === "income");
   const expenseTransactions = typedTransactions.filter(t => t.type === "expense");
@@ -877,9 +895,17 @@ export async function completeReconciliation(id: string) {
   // Get reconciliation with items
   const reconciliation = await getReconciliation(id);
 
-  // Check if all items are reconciled
-  const allReconciled = (reconciliation.items as ReconciliationItem[]).every(
-    (item) => item.is_reconciled
+  // Check if all items are reconciled and if item.transaction is a valid object
+  const allReconciled = (reconciliation.items || []).every(
+    (item) => {
+      const transaction = item.transaction;
+      let isValidTransactionObject = false;
+      // Ensure transaction is a non-null object before checking for 'error' key
+      if (transaction !== null && typeof transaction === 'object') {
+        isValidTransactionObject = !('error' in transaction);
+      }
+      return item.is_reconciled && isValidTransactionObject;
+    }
   );
 
   if (!allReconciled) {

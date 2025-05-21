@@ -16,9 +16,27 @@ export function generateCsrfToken(): string {
 }
 
 /**
- * Generate a CSRF token and set it in a cookie
+ * Sets the CSRF token cookie on a given NextResponse object.
+ * @param response The NextResponse object to set the cookie on.
+ * @param token The CSRF token value.
  */
-export async function setCsrfToken(): Promise<string> {
+export function setCsrfTokenOnResponse(response: import('next/server').NextResponse, token: string): void {
+  response.cookies.set({
+    name: CSRF_TOKEN_COOKIE,
+    value: token,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: CSRF_TOKEN_EXPIRY,
+  });
+}
+
+/**
+ * Generate a CSRF token and set it in a cookie using next/headers cookies().
+ * Primarily for use in Server Components or server-side actions where direct response manipulation is not available.
+ */
+export async function setCsrfCookieViaNextHeaders(): Promise<string> {
   const token = generateCsrfToken();
   
   // Set the CSRF token in a cookie
@@ -130,7 +148,7 @@ export async function getOrCreateCsrfToken(): Promise<string> {
     return existingToken;
   }
   
-  return await setCsrfToken();
+  return await setCsrfCookieViaNextHeaders();
 }
 
 /**
