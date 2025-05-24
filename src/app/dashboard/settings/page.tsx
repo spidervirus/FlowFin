@@ -23,8 +23,17 @@ export default async function SettingsPage() {
   // to determine what settings they can access
   const isAdmin = true;
 
+  // Fetch company settings to determine if setup is needed
+  const { data: settings, error: settingsError } = await supabase
+    .from("company_settings")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  const needsSetup = !settings;
+
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={needsSetup}>
       <div className="flex flex-col gap-8">
         {/* Header Section */}
         <header>

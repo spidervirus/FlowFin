@@ -331,8 +331,11 @@ export default async function DashboardPage() {
         user_id: transaction.user_id
       })) || [];
 
+    // Determine if setup is needed (e.g., based on company settings)
+    const needsSetup = !settingsResult.data;
+
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={needsSetup}>
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-4 mb-8">
             <div className="flex items-center justify-between">

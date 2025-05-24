@@ -271,6 +271,7 @@ export default function DashboardSidebar() {
       <div className="flex h-full flex-col">
         <div className="flex h-16 items-center border-b px-4">
           <Link href="/" className="flex items-center space-x-2">
+            <img src="/favicon.ico" alt="FlowFin Logo" className="h-7 w-7" />
             <span className="font-bold text-xl">FlowFin</span>
           </Link>
         </div>

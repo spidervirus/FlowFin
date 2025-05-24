@@ -92,7 +92,7 @@ export default function SignUp({
       }
 
       router.push(
-        "/sign-in?message=Please check your email to verify your account",
+        "/dashboard"
       );
     } catch (err) {
       console.error("Sign up error:", err);
