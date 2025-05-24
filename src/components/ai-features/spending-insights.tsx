@@ -416,54 +416,61 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
   const findUnusualSpending = (
     expenses: Transaction[],
   ): SpendingInsight | null => {
-    // Group by category and find unusually high spending
-    const categoryAvg = new Map<string, number[]>();
+    // Group by category
+    const categoryAmounts = new Map<string, number[]>();
 
     expenses.forEach((expense) => {
       const categoryName = expense.category?.name || "Uncategorized";
 
-      if (!categoryAvg.has(categoryName)) {
-        categoryAvg.set(categoryName, []);
+      if (!categoryAmounts.has(categoryName)) {
+        categoryAmounts.set(categoryName, []);
       }
 
-      categoryAvg.get(categoryName)?.push(expense.amount);
+      categoryAmounts.get(categoryName)?.push(expense.amount);
     });
 
-    // Find category with unusually high spending
-    let unusualCategory = "";
-    let unusualAmount = 0;
-    let unusualPercentage = 0;
+    let mostUnusualInsight: SpendingInsight | null = null;
 
-    categoryAvg.forEach((amounts, category) => {
-      if (amounts.length < 2) return;
+    categoryAmounts.forEach((amounts, category) => {
+      // Need at least 3 data points to calculate quartiles meaningfully
+      if (amounts.length < 3) return;
 
-      const total = amounts.reduce((sum, amount) => sum + amount, 0);
-      const avg = total / amounts.length;
+      // Sort amounts to find quartiles
+      const sortedAmounts = [...amounts].sort((a, b) => a - b);
+      const q1 = sortedAmounts[Math.floor((sortedAmounts.length - 1) * 0.25)];
+      const q3 = sortedAmounts[Math.floor((sortedAmounts.length - 1) * 0.75)];
+      const iqr = q3 - q1;
 
-      // Find the highest amount
-      const highest = Math.max(...amounts);
+      // Define outlier boundaries
+      const upperBoundary = q3 + 1.5 * iqr;
 
-      // Calculate percentage above average
-      const percentAboveAvg = ((highest - avg) / avg) * 100;
+      // Find highest outlier in this category
+      const highestOutlier = sortedAmounts.findLast(amount => amount > upperBoundary);
 
-      if (percentAboveAvg > 50 && percentAboveAvg > unusualPercentage) {
-        unusualCategory = category;
-        unusualAmount = highest;
-        unusualPercentage = percentAboveAvg;
+      if (highestOutlier !== undefined) {
+        // Calculate how far above the upper boundary this outlier is (as a percentage of IQR)
+        const distanceAboveBoundary = highestOutlier - upperBoundary;
+        // Use a metric to compare unusualness across categories, e.g., percentage above median or Q3
+        const median = sortedAmounts[Math.floor(sortedAmounts.length / 2)];
+        const percentageAboveMedian = ((highestOutlier - median) / median) * 100;
+
+        const currentInsight: SpendingInsight = {
+          title: "Unusual Spending Detected",
+          description: `Your ${category} expense of ${formatCurrency(highestOutlier)} is significantly higher than typical spending in this category.`, // Simplified description
+          type: "negative",
+          icon: <AlertCircle className="h-5 w-5 text-amber-500" />,
+          value: formatCurrency(highestOutlier),
+          change: percentageAboveMedian, // Using percentage above median as a measure of unusualness
+        };
+
+        // Keep track of the most unusual insight (e.g., highest percentage above median)
+        if (!mostUnusualInsight || (currentInsight.change && mostUnusualInsight.change && currentInsight.change > mostUnusualInsight.change)) {
+          mostUnusualInsight = currentInsight;
+        }
       }
     });
 
-    if (unusualCategory) {
-      return {
-        title: "Unusual Spending Detected",
-        description: `Your highest ${unusualCategory} expense of ${formatCurrency(unusualAmount)} is ${Math.round(unusualPercentage)}% above your average.`,
-        type: "negative",
-        icon: <AlertCircle className="h-5 w-5 text-amber-500" />,
-        value: formatCurrency(unusualAmount),
-      };
-    }
-
-    return null;
+    return mostUnusualInsight;
   };
 
   const generateSavingSuggestions = (
@@ -472,49 +479,24 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
   ) => {
     const suggestions: SpendingInsight[] = [];
 
-    // Check dining expenses
-    const diningExpenses = expenses.filter((e) => {
-      const categoryName = e.category?.name.toLowerCase() || "";
-      return categoryName.includes("dining");
-    });
+    // Generate suggestions for top spending categories
+    const topCategoriesToSuggest = categorySpending.slice(0, 3); // Suggest for the top 3 categories
 
-    if (diningExpenses.length > 0) {
-      const diningTotal = diningExpenses.reduce((sum, e) => sum + e.amount, 0);
-      const diningAvg = (diningTotal / getDateRange(expenses)) * 30; // Monthly average
+    topCategoriesToSuggest.forEach(category => {
+      const potentialSavingsAmount = Math.round(category.amount * 0.05); // Suggest a 5% reduction as a starting point
 
-      if (diningAvg > 200) {
+      if (potentialSavingsAmount > 0) {
         suggestions.push({
-          title: "Reduce Dining Out",
-          description: `You spend about ${formatCurrency(diningAvg)} monthly on dining out. Cooking at home more often could save you around ${formatCurrency(Math.round(diningAvg * 0.3))} per month.`,
+          title: `Consider Reducing ${category.category.name} Spending`,
+          description: `Your highest spending category is ${category.category.name}. Reducing these expenses by just 5% could save you around ${formatCurrency(potentialSavingsAmount)} ${timeframe === '1M' ? 'this month' : `over the last ${timeframe}`}.`,
           type: "suggestion",
-          icon: <Utensils className="h-5 w-5 text-green-500" />,
-          value: formatCurrency(Math.round(diningAvg * 0.3)),
+          icon: <PiggyBank className="h-5 w-5 text-green-500" />,
+          value: formatCurrency(potentialSavingsAmount),
         });
       }
-    }
-
-    // Check grocery expenses
-    const foodExpenses = expenses.filter((e) => {
-      const categoryName = e.category?.name.toLowerCase() || "";
-      return categoryName.includes("groceries");
     });
 
-    if (foodExpenses.length >= 5) {
-      const foodTotal = foodExpenses.reduce((sum, e) => sum + e.amount, 0);
-      const foodAvg = (foodTotal / getDateRange(expenses)) * 30; // Monthly average
-
-      if (foodAvg > 50) {
-        suggestions.push({
-          title: "Food Expenses",
-          description: `You spend about ${formatCurrency(foodAvg)} monthly on food. Cooking at home more often could save you around ${formatCurrency(Math.round(foodAvg * 0.7))} per month.`,
-          type: "suggestion",
-          icon: <Coffee className="h-5 w-5 text-green-500" />,
-          value: formatCurrency(Math.round(foodAvg * 0.7)),
-        });
-      }
-    }
-
-    // Subscription suggestion
+    // Keep the subscription review suggestion if relevant data exists
     const subscriptionKeywords = [
       "subscription",
       "netflix",
@@ -540,32 +522,18 @@ export default function SpendingInsights({ currency }: SpendingInsightsProps) {
 
       suggestions.push({
         title: "Review Subscriptions",
-        description: `You've spent ${formatCurrency(subscriptionTotal)} on subscriptions. Consider reviewing which ones you actually use regularly.`,
+        description: `You've spent ${formatCurrency(subscriptionTotal)} on subscriptions ${timeframe === '1M' ? 'this month' : `over the last ${timeframe}`}. Consider reviewing which ones you actually use regularly.`,
         type: "suggestion",
         icon: <CreditCard className="h-5 w-5 text-green-500" />,
         value: formatCurrency(subscriptionTotal),
       });
     }
 
-    // General saving suggestion based on top category
-    if (categorySpending.length > 0) {
-      const topCategory = categorySpending[0];
-      const potentialSavings = Math.round(topCategory.amount * 0.1); // 10% reduction
-
-      suggestions.push({
-        title: `Reduce ${topCategory.category.name} Expenses`,
-        description: `Your highest spending category is ${topCategory.category.name}. Reducing these expenses by just 10% would save you ${formatCurrency(potentialSavings)}.`,
-        type: "suggestion",
-        icon: <PiggyBank className="h-5 w-5 text-green-500" />,
-        value: formatCurrency(potentialSavings),
-      });
-    }
-
     // Add a general tip
     suggestions.push({
-      title: "50/30/20 Rule",
+      title: "Track Your Spending",
       description:
-        "Consider following the 50/30/20 budget rule: 50% on needs, 30% on wants, and 20% on savings and debt repayment.",
+        "Regularly tracking your expenses is the first step to understanding and controlling your spending habits.",
       type: "suggestion",
       icon: <Lightbulb className="h-5 w-5 text-yellow-500" />,
     });

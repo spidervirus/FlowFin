@@ -27,6 +27,9 @@ import { toast } from "sonner";
 import { CURRENCY_CONFIG, getUserCurrency, CurrencyCode } from "@/lib/utils";
 import { useEffect, useState } from "react";
 
+// Use the generated Database type directly for TransactionInsert
+type TransactionInsert = Database['public']['Tables']['transactions']['Insert'];
+
 interface PaymentFormProps {
   invoiceId?: string;
   defaultValues?: Partial<PaymentFormValues>;
@@ -41,6 +44,7 @@ export function PaymentForm({
   onCancel,
 }: PaymentFormProps) {
   const [defaultCurrency, setDefaultCurrency] = useState<CurrencyCode>("USD");
+  const [defaultAccountId, setDefaultAccountId] = useState<string | null>(null);
   const supabase = createClientComponentClient<Database>();
 
   useEffect(() => {
@@ -79,8 +83,32 @@ export function PaymentForm({
       }
     };
 
+    const fetchDefaultAccount = async (userId: string) => {
+      try {
+        const { data: accounts, error } = await supabase
+          .from("accounts")
+          .select("id")
+          .eq("user_id", userId)
+          .limit(1);
+
+        if (error) throw error;
+        if (accounts && accounts.length > 0) {
+          setDefaultAccountId(accounts[0].id);
+        }
+      } catch (error) {
+        console.error("Error fetching default account:", error);
+        toast.error("Failed to load default account for transactions.");
+      }
+    };
+
     fetchCompanySettings();
     fetchInvoiceCurrency();
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        fetchDefaultAccount(user.id);
+      }
+    });
   }, [invoiceId, supabase]);
 
   const form = useForm<PaymentFormValues>({
@@ -134,19 +162,55 @@ export function PaymentForm({
 
       if (paymentError) throw paymentError;
 
-      // Update invoice status if payment matches total amount
+      // Update invoice status if payment matches total amount and create income transaction
       if (invoiceId) {
-        const { data: invoice } = await supabase
+        const { data: invoiceData, error: fetchInvoiceError } = await supabase
           .from("invoices")
-          .select("total_amount, status")
+          .select("total_amount, status, currency")
           .eq("id", invoiceId)
           .single();
 
-        if (invoice && invoice.total_amount === data.amount) {
-          await supabase
-            .from("invoices")
-            .update({ status: "paid", payment_date: data.payment_date })
-            .eq("id", invoiceId);
+        if (fetchInvoiceError) {
+           console.error("Error fetching invoice after payment:", fetchInvoiceError);
+           // Continue processing even if fetching invoice fails, payment is recorded.
+        } else if (invoiceData) { // Check if invoiceData exists and is not null
+           // Access properties only after confirming invoiceData exists
+           if (invoiceData.total_amount !== undefined && invoiceData.currency !== undefined) {
+             if (invoiceData.total_amount === data.amount) {
+              await supabase
+                .from("invoices")
+                .update({ status: "paid", payment_date: data.payment_date })
+                .eq("id", invoiceId);
+             }
+
+             // Create a corresponding income transaction
+             // Use the fetched default account ID
+             const incomeTransaction: TransactionInsert = {
+               user_id: user.id,
+               amount: Number(data.amount) || 0,
+               type: 'income',
+               date: data.payment_date,
+               description: `Payment for Invoice ${invoiceId}`,
+               account_id: defaultAccountId!, // Use the default account ID (asserting non-null as per DB type)
+               // currency field is NOT present in the transactions table insert type according to database.types.ts
+               // category_id: 'income_category_id',
+             };
+
+             // Only insert transaction if a default account ID was successfully fetched
+             if (defaultAccountId) {
+               const { error: transactionError } = await supabase
+                 .from("transactions")
+                 .insert([incomeTransaction]); // Insert as an array
+
+               if (transactionError) {
+                 console.error("Error creating income transaction for payment:", transactionError);
+                 toast.error("Failed to create income transaction for payment");
+               }
+             } else {
+                console.error("Default account ID not available for transaction insertion.");
+                toast.error("Failed to create income transaction: Default account not found.");
+             }
+           }
         }
       }
 
