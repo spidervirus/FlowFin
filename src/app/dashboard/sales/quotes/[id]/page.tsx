@@ -125,7 +125,7 @@ export default function QuoteDetailPage({ params }: QuoteDetailPageProps) {
 
   if (isLoading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div>Loading...</div>
       </DashboardWrapper>
     );
@@ -133,14 +133,14 @@ export default function QuoteDetailPage({ params }: QuoteDetailPageProps) {
 
   if (!quote) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div>Quote not found</div>
       </DashboardWrapper>
     );
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <DashboardHeader
         heading={`Quote ${quote.quote_number}`}
         text="View and manage quote details."
@@ -282,4 +282,4 @@ export default function QuoteDetailPage({ params }: QuoteDetailPageProps) {
       </div>
     </DashboardWrapper>
   );
-} 
+}
