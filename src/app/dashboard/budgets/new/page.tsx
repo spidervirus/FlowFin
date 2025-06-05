@@ -84,11 +84,11 @@ export default function NewBudgetPage() {
         }
 
         // Map the categories data to match the Category interface
-        const typedCategories = ((categories || []) as CategoryRow[]).map(
-          (cat) => ({
+        const typedCategories = ((categories || []) as any[]).map(
+          (cat: any) => ({
             id: cat.id,
             name: cat.name,
-            type: cat.type,
+            type: cat.type as "income" | "expense",
             color: cat.color,
             user_id: cat.user_id,
             created_at: cat.created_at,
@@ -97,7 +97,7 @@ export default function NewBudgetPage() {
             is_active: cat.is_active,
             is_default: cat.is_default
           }),
-        );
+        ).filter((cat: any) => cat.type === "expense" || cat.type === "income");
 
         setExpenseCategories(typedCategories);
       } catch (error) {

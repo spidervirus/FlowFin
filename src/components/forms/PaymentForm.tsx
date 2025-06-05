@@ -173,10 +173,11 @@ export function PaymentForm({
         if (fetchInvoiceError) {
            console.error("Error fetching invoice after payment:", fetchInvoiceError);
            // Continue processing even if fetching invoice fails, payment is recorded.
-        } else if (invoiceData) { // Check if invoiceData exists and is not null
+        } else if (invoiceData && typeof invoiceData === 'object' && !('error' in (invoiceData as any))) { // Check if invoiceData exists and is not null
            // Access properties only after confirming invoiceData exists
-           if (invoiceData.total_amount !== undefined && invoiceData.currency !== undefined) {
-             if (invoiceData.total_amount === data.amount) {
+           const invoice = invoiceData as any;
+           if ('total_amount' in invoice && 'currency' in invoice && invoice.total_amount !== undefined && invoice.currency !== undefined) {
+             if (invoice.total_amount === data.amount) {
               await supabase
                 .from("invoices")
                 .update({ status: "paid", payment_date: data.payment_date })
@@ -384,4 +385,4 @@ export function PaymentForm({
       </form>
     </Form>
   );
-} 
+}

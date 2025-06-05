@@ -901,8 +901,8 @@ export async function completeReconciliation(id: string) {
       const transaction = item.transaction;
       let isValidTransactionObject = false;
       // Ensure transaction is a non-null object before checking for 'error' key
-      if (transaction !== null && typeof transaction === 'object') {
-        isValidTransactionObject = !('error' in transaction);
+      if (transaction && transaction !== null && typeof transaction === 'object') {
+        isValidTransactionObject = !('error' in (transaction as any));
       }
       return item.is_reconciled && isValidTransactionObject;
     }
