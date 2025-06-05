@@ -83,7 +83,7 @@ export default function Pricing() {
             {/* Timeline */}
             <div className="mt-12 text-center">
               <p className="text-gray-500 text-sm">
-                Expected launch: <span className="font-medium text-gray-700">Q2 2024</span>
+                Expected launch: <span className="font-medium text-gray-700">Soon</span>
               </p>
             </div>
           </div>
