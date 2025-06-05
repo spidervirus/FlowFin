@@ -332,7 +332,7 @@ export default function TimesheetsPage() {
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <LoadingSpinner size="lg" text="Loading timesheets..." />
         </div>
@@ -341,7 +341,7 @@ export default function TimesheetsPage() {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col space-y-6">
         <div className="flex justify-between items-center">
           <div>

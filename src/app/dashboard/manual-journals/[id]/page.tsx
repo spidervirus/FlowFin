@@ -214,7 +214,7 @@ export default function JournalEntryPage({
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
         </div>
@@ -224,7 +224,7 @@ export default function JournalEntryPage({
 
   if (!journal) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex flex-col items-center justify-center h-[60vh]">
           <FileText className="h-12 w-12 text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900">
@@ -255,7 +255,7 @@ export default function JournalEntryPage({
   );
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col space-y-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-4">

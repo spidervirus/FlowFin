@@ -112,7 +112,7 @@ export default function EditQuotePage({ params }: EditQuotePageProps) {
 
   if (isLoading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div>Loading...</div>
       </DashboardWrapper>
     );
@@ -120,14 +120,14 @@ export default function EditQuotePage({ params }: EditQuotePageProps) {
 
   if (!quote) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div>Quote not found</div>
       </DashboardWrapper>
     );
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <DashboardHeader
         heading="Edit Quote"
         text="Update the quote details."

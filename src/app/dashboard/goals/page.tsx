@@ -148,7 +148,7 @@ export default function GoalsPage() {
 
   if (isLoading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <p className="text-lg">Loading goals...</p>
         </div>
@@ -157,7 +157,7 @@ export default function GoalsPage() {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-4 mb-8">
           <div className="flex items-center justify-between">

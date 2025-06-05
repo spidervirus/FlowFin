@@ -95,7 +95,7 @@ export default function NewTransactionPage() {
   }, []);
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="space-y-8">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">New Transaction</h2>

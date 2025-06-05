@@ -84,7 +84,7 @@ export default function EditItemPage({ params }: EditItemPageProps) {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col gap-8">
         <DashboardHeader
           heading="Edit Item"

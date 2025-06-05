@@ -282,7 +282,7 @@ export default function QuotesPage() {
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <p className="text-lg">Loading quotes...</p>
         </div>
@@ -291,7 +291,7 @@ export default function QuotesPage() {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <DashboardHeader
         heading="Quotes"
         text="Create and manage quotes for your customers."

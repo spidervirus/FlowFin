@@ -295,7 +295,7 @@ export default function ReportsPage() {
 
   if (isLoading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <p className="text-lg">Loading reports...</p>
         </div>
@@ -306,7 +306,7 @@ export default function ReportsPage() {
   const report = generateReport();
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-4 mb-8">
           <div className="flex items-center justify-between">

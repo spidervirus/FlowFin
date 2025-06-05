@@ -103,7 +103,7 @@ export default function NewPayrollPeriodPage() {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col space-y-6">
         <div className="flex items-center space-x-2">
           <Link href="/dashboard/payroll/periods">

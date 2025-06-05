@@ -121,7 +121,7 @@ export default function ItemsPage() {
   };
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col gap-8">
         <DashboardHeader
           heading="Items"

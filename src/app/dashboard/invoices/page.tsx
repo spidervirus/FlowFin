@@ -233,7 +233,7 @@ export default function InvoicesPage() {
   if (loading) {
     return (
       <>
-        <DashboardWrapper>
+        <DashboardWrapper needsSetup={false}>
           <div className="flex justify-center items-center h-[60vh]">
             <p className="text-lg">Loading invoices...</p>
           </div>
@@ -244,7 +244,7 @@ export default function InvoicesPage() {
 
   return (
     <>
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="container mx-auto px-4 py-8 flex flex-col gap-8">
           {/* Header Section */}
           <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

@@ -408,7 +408,7 @@ export default function TimesheetDetailPage({
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <LoadingSpinner size="lg" text="Loading timesheet..." />
         </div>
@@ -418,7 +418,7 @@ export default function TimesheetDetailPage({
 
   if (fetchError) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -432,7 +432,7 @@ export default function TimesheetDetailPage({
 
   if (!timesheet) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -445,7 +445,7 @@ export default function TimesheetDetailPage({
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col space-y-6">
         <div className="flex justify-between items-center">
           <div>

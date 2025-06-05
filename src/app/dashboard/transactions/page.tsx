@@ -261,7 +261,7 @@ export default function TransactionsPage() {
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex items-center justify-center h-full">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
         </div>
@@ -270,7 +270,7 @@ export default function TransactionsPage() {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="space-y-8">
         <div>
           <div className="flex items-center justify-between">

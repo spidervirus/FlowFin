@@ -101,7 +101,7 @@ export default function AIFeaturesPage() {
 
   if (isLoading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <p className="text-lg">Loading AI features...</p>
         </div>
@@ -110,7 +110,7 @@ export default function AIFeaturesPage() {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col gap-8">
         {/* Header Section */}
         <header>

@@ -98,7 +98,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
 
   if (loading && !customerData) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
         </div>
@@ -108,7 +108,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
 
   if (!customerData && !loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex flex-col justify-center items-center h-[60vh]">
           <p className="text-lg font-semibold mb-2">Customer not found.</p>
           <p className="text-muted-foreground mb-4">Could not load customer details or customer does not exist.</p>
@@ -121,7 +121,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="space-y-6">
         <div className="flex items-center gap-4 mb-6">
            <Link href="/dashboard/sales/customers">

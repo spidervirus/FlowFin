@@ -52,7 +52,7 @@ export default function CreateItemPage() {
   };
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col gap-8">
         <DashboardHeader
           heading="Create Item"

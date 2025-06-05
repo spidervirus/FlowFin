@@ -352,7 +352,7 @@ export default function BudgetPage() {
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex flex-col gap-4 p-4 md:p-6">
           <div className="flex justify-between items-center">
             <Skeleton className="h-8 w-32" />
@@ -405,7 +405,7 @@ export default function BudgetPage() {
 
   if (budgets.length === 0) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex flex-col items-center justify-center h-[60vh] p-4">
           <div className="text-center max-w-md">
             <div className="bg-gray-100 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
@@ -429,7 +429,7 @@ export default function BudgetPage() {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="space-y-4 p-4 md:p-6">
         <div className="flex justify-between items-center">
           <div>

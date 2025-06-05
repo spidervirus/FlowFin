@@ -603,7 +603,7 @@ export default function PayRunsPage() {
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <LoadingSpinner size="lg" text="Loading pay runs..." />
         </div>
@@ -612,7 +612,7 @@ export default function PayRunsPage() {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col space-y-6">
         <div className="flex justify-between items-center">
           <div>

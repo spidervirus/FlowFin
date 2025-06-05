@@ -31,7 +31,7 @@ export default async function EditJournalEntryPage({
   if (journalError) {
     console.error("Error fetching journal:", journalError);
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="p-4">
           <p className="text-red-500">Error loading journal entry</p>
         </div>
@@ -41,7 +41,7 @@ export default async function EditJournalEntryPage({
 
   if (!journal) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="p-4">
           <p>Journal entry not found</p>
         </div>
@@ -52,7 +52,7 @@ export default async function EditJournalEntryPage({
   // Check if journal is already posted
   if (journal.status === "posted") {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="p-4">
           <p>This journal entry has already been posted and cannot be edited</p>
         </div>
@@ -70,7 +70,7 @@ export default async function EditJournalEntryPage({
   if (accountsError) {
     console.error("Error fetching accounts:", accountsError);
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="p-4">
           <p className="text-red-500">Error loading accounts</p>
         </div>
@@ -136,7 +136,7 @@ export default async function EditJournalEntryPage({
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="p-4">
         <Card>
           <CardHeader>

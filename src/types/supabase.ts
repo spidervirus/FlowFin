@@ -2666,42 +2666,7 @@ export type Database = {
         }
         Relationships: []
       }
-      stripe_plans: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          features: Json | null
-          id: string
-          name: string
-          price: number
-          receipt_limit: number | null
-          transaction_limit: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          features?: Json | null
-          id: string
-          name: string
-          price: number
-          receipt_limit?: number | null
-          transaction_limit?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          features?: Json | null
-          id?: string
-          name?: string
-          price?: number
-          receipt_limit?: number | null
-          transaction_limit?: number | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
+      // stripe_plans table removed - FlowFin is now completely free
       subscription_limits: {
         Row: {
           created_at: string
@@ -3133,14 +3098,7 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
-          stripe_customer_id: string | null
-          subscription_period_end: string | null
-          subscription_period_start: string | null
-          subscription_plan: string | null
-          subscription_status: string | null
-          subscription_updated_at: string | null
-          trial_end: string | null
-          trial_ends_at: string | null
+          // All subscription and trial fields removed - free tier model
           updated_at: string | null
         }
         Insert: {
@@ -3148,14 +3106,7 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
-          stripe_customer_id?: string | null
-          subscription_period_end?: string | null
-          subscription_period_start?: string | null
-          subscription_plan?: string | null
-          subscription_status?: string | null
-          subscription_updated_at?: string | null
-          trial_end?: string | null
-          trial_ends_at?: string | null
+          // All subscription and trial fields removed - free tier model
           updated_at?: string | null
         }
         Update: {
@@ -3163,14 +3114,7 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
-          stripe_customer_id?: string | null
-          subscription_period_end?: string | null
-          subscription_period_start?: string | null
-          subscription_plan?: string | null
-          subscription_status?: string | null
-          subscription_updated_at?: string | null
-          trial_end?: string | null
-          trial_ends_at?: string | null
+          // All subscription and trial fields removed - free tier model
           updated_at?: string | null
         }
         Relationships: []

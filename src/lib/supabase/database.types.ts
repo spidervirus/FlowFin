@@ -145,13 +145,7 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "bank_accounts_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "user_subscription_details_mv"
-            referencedColumns: ["id"]
-          },
+          // Reference to user_subscription_details_mv removed - view no longer exists
           {
             foreignKeyName: "bank_accounts_user_id_fkey"
             columns: ["user_id"]
@@ -2666,111 +2660,12 @@ export type Database = {
         }
         Relationships: []
       }
-      stripe_plans: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          features: Json | null
-          id: string
-          name: string
-          price: number
-          receipt_limit: number | null
-          transaction_limit: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          features?: Json | null
-          id: string
-          name: string
-          price: number
-          receipt_limit?: number | null
-          transaction_limit?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          features?: Json | null
-          id?: string
-          name?: string
-          price?: number
-          receipt_limit?: number | null
-          transaction_limit?: number | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      subscription_limits: {
-        Row: {
-          created_at: string
-          id: string
-          period_end: string | null
-          period_start: string | null
-          receipts_count: number | null
-          transactions_count: number | null
-          updated_at: string
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          period_end?: string | null
-          period_start?: string | null
-          receipts_count?: number | null
-          transactions_count?: number | null
-          updated_at?: string
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          period_end?: string | null
-          period_start?: string | null
-          receipts_count?: number | null
-          transactions_count?: number | null
-          updated_at?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      subscriptions: {
-        Row: {
-          cancel_at_period_end: boolean | null
-          created_at: string | null
-          current_period_end: string | null
-          id: string
-          plan_id: string
-          status: string
-          subscription_id: string | null
-          updated_at: string | null
-          user_id: string
-        }
-        Insert: {
-          cancel_at_period_end?: boolean | null
-          created_at?: string | null
-          current_period_end?: string | null
-          id?: string
-          plan_id: string
-          status: string
-          subscription_id?: string | null
-          updated_at?: string | null
-          user_id: string
-        }
-        Update: {
-          cancel_at_period_end?: boolean | null
-          created_at?: string | null
-          current_period_end?: string | null
-          id?: string
-          plan_id?: string
-          status?: string
-          subscription_id?: string | null
-          updated_at?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
+      // stripe_plans table removed - FlowFin is now completely free
+      // All subscription-related tables have been removed
+      // subscription_limits table removed - FlowFin is now completely free
+      // All subscription and payment infrastructure has been removed
+      // subscription_limits table removed - no longer needed for free tier
+      // subscriptions table removed - no longer needed for free tier
       suppliers: {
         Row: {
           address: string | null
@@ -3133,14 +3028,7 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
-          stripe_customer_id: string | null
-          subscription_period_end: string | null
-          subscription_period_start: string | null
-          subscription_plan: string | null
-          subscription_status: string | null
-          subscription_updated_at: string | null
-          trial_end: string | null
-          trial_ends_at: string | null
+          // All subscription and trial fields removed - free tier model
           updated_at: string | null
         }
         Insert: {
@@ -3148,14 +3036,7 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
-          stripe_customer_id?: string | null
-          subscription_period_end?: string | null
-          subscription_period_start?: string | null
-          subscription_plan?: string | null
-          subscription_status?: string | null
-          subscription_updated_at?: string | null
-          trial_end?: string | null
-          trial_ends_at?: string | null
+          // All subscription and trial fields removed - free tier model
           updated_at?: string | null
         }
         Update: {
@@ -3163,14 +3044,7 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
-          stripe_customer_id?: string | null
-          subscription_period_end?: string | null
-          subscription_period_start?: string | null
-          subscription_plan?: string | null
-          subscription_status?: string | null
-          subscription_updated_at?: string | null
-          trial_end?: string | null
-          trial_ends_at?: string | null
+          // All subscription and trial fields removed - free tier model
           updated_at?: string | null
         }
         Relationships: []
@@ -3267,16 +3141,7 @@ export type Database = {
         }
         Relationships: []
       }
-      subscription_metrics: {
-        Row: {
-          active_subscribers: number | null
-          churned_subscribers: number | null
-          month: string | null
-          monthly_revenue: number | null
-          total_subscribers: number | null
-        }
-        Relationships: []
-      }
+      // subscription_metrics view removed - no longer needed for free tier
       usage_metrics: {
         Row: {
           active_users: number | null
@@ -3302,24 +3167,7 @@ export type Database = {
         }
         Relationships: []
       }
-      user_subscription_details_mv: {
-        Row: {
-          cancel_at_period_end: boolean | null
-          email: string | null
-          id: string | null
-          next_reset_date: string | null
-          plan_id: string | null
-          plan_name: string | null
-          plan_price: number | null
-          receipts_count: number | null
-          receipts_remaining: number | null
-          subscription_end_date: string | null
-          subscription_status: string | null
-          transactions_count: number | null
-          transactions_remaining: number | null
-        }
-        Relationships: []
-      }
+      // user_subscription_details_mv view removed - no longer needed for free tier
     }
     Functions: {
       accept_invitation: {
@@ -3502,16 +3350,7 @@ export type Database = {
           updated_at: string
         }[]
       }
-      get_subscription_analytics: {
-        Args: { start_date?: string; end_date?: string }
-        Returns: {
-          period: string
-          total_revenue: number
-          active_subscribers: number
-          churn_rate: number
-          avg_revenue_per_user: number
-        }[]
-      }
+      // get_subscription_analytics function removed - no longer needed for free tier
       get_user_organization_roles: {
         Args: { p_user_id: string; p_organization_id: string }
         Returns: {
@@ -3523,35 +3362,8 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string[]
       }
-      get_user_subscription_details: {
-        Args: { user_uuid?: string }
-        Returns: {
-          id: string
-          email: string
-          plan_id: string
-          plan_name: string
-          plan_price: number
-          subscription_status: string
-          subscription_end_date: string
-          cancel_at_period_end: boolean
-          transactions_count: number
-          receipts_count: number
-          transactions_remaining: number
-          receipts_remaining: number
-          next_reset_date: string
-        }[]
-      }
-      get_user_subscription_status: {
-        Args: { user_uuid: string }
-        Returns: {
-          plan: string
-          status: string
-          current_period_end: string
-          transactions_remaining: number
-          receipts_remaining: number
-          next_reset_date: string
-        }[]
-      }
+      // get_user_subscription_details function removed - no longer needed for free tier
+      // get_user_subscription_status function removed - no longer needed for free tier
       handle_new_user: {
         Args: { user_id: string; user_email: string; user_name: string }
         Returns: undefined
@@ -3615,26 +3427,7 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      rollback_subscription_analytics: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      rollback_subscription_notifications: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      rollback_subscription_tables: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      rollback_user_subscriptions: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      send_subscription_notification: {
-        Args: { p_user_id: string; p_template_type: string; p_metadata: Json }
-        Returns: undefined
-      }
+      // All subscription-related rollback and notification functions removed - no longer needed for free tier
       update_setup_progress: {
         Args: {
           user_id_param: string

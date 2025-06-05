@@ -429,7 +429,7 @@ export default function EditInvoicePage() {
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <p className="text-lg">Loading invoice...</p>
         </div>
@@ -438,7 +438,7 @@ export default function EditInvoicePage() {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">

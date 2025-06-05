@@ -190,7 +190,7 @@ export default function PayRunDetailsPage({
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <LoadingSpinner size="lg" text="Loading pay run details..." />
         </div>
@@ -200,7 +200,7 @@ export default function PayRunDetailsPage({
 
   if (!payRun) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex flex-col items-center justify-center h-[60vh]">
           <h2 className="text-2xl font-bold mb-4">Pay Run Not Found</h2>
           <Button onClick={() => router.push("/dashboard/payroll/pay-runs")}>
@@ -213,7 +213,7 @@ export default function PayRunDetailsPage({
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col space-y-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-4">

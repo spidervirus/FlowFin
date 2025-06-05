@@ -116,7 +116,7 @@ export default function NewAccountPage() {
   };
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col space-y-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-4">

@@ -321,7 +321,7 @@ export default function InvoiceDetailPage() {
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <p className="text-lg">Loading invoice...</p>
         </div>
@@ -331,7 +331,7 @@ export default function InvoiceDetailPage() {
 
   if (error || !invoice) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center mb-8">
             <Link href="/dashboard/invoices">
@@ -357,7 +357,7 @@ export default function InvoiceDetailPage() {
   console.log("[DETAIL PAGE DEBUG] Final currency state before render:", currency);
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">

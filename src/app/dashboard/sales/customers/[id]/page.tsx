@@ -130,7 +130,7 @@ export default function CustomerDetailsPage() {
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex items-center justify-center h-full">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
         </div>
@@ -140,7 +140,7 @@ export default function CustomerDetailsPage() {
 
   if (!customer) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="container mx-auto px-4 py-8">
           <div className="text-center">
             <h1 className="text-2xl font-bold mb-4">Customer not found</h1>
@@ -161,7 +161,7 @@ export default function CustomerDetailsPage() {
   };
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between mb-6">

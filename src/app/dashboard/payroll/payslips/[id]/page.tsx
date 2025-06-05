@@ -240,7 +240,7 @@ export default function PayslipPage({ params }: { params: { id: string } }) {
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
         </div>
@@ -250,7 +250,7 @@ export default function PayslipPage({ params }: { params: { id: string } }) {
 
   if (!payslip || !employee || !period) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="text-center py-8">
           <h3 className="text-lg font-medium">Payslip not found</h3>
           <p className="text-sm text-gray-500 mt-2">
@@ -271,7 +271,7 @@ export default function PayslipPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col space-y-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-2">

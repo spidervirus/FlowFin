@@ -87,7 +87,7 @@ export default function EditAccountPage({
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex items-center justify-center h-full">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
         </div>
@@ -97,7 +97,7 @@ export default function EditAccountPage({
 
   if (!account) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex items-center justify-center h-full">
           <p className="text-lg text-muted-foreground">Account not found</p>
         </div>
@@ -106,7 +106,7 @@ export default function EditAccountPage({
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Edit Account</h2>

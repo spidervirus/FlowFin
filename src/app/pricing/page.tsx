@@ -6,12 +6,12 @@ export default function PricingPage() {
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold mb-4">Pricing Information</h1>
         <p className="text-xl text-muted-foreground">
-          Our subscription plans and direct payment features are currently unavailable.
+          FlowFin is completely free to use for all users.
         </p>
         <p className="text-lg text-muted-foreground mt-4">
-          All features are temporarily available for use. We appreciate your understanding.
+          Enjoy unlimited access to all features with no subscription required.
         </p>
       </div>
     </div>
   );
-} 
+}

@@ -9,7 +9,7 @@ import DashboardWrapper from "../../../dashboard-wrapper";
 
 export default function NewCustomerPage() {
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center gap-4 mb-6">
           <Link href="/dashboard/sales/customers">

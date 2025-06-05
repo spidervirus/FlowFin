@@ -96,7 +96,7 @@ export default function CreateQuotePage() {
   };
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <DashboardHeader
         heading="Create Quote"
         text="Create a new quote for your customer."

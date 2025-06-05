@@ -221,7 +221,7 @@ export default function PayrollSettingsPage() {
 
   if (loading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper needsSetup={false}>
         <div className="flex justify-center items-center h-[60vh]">
           <LoadingSpinner size="lg" text="Loading settings..." />
         </div>
@@ -230,7 +230,7 @@ export default function PayrollSettingsPage() {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper needsSetup={false}>
       <div className="flex flex-col space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Payroll Settings</h1>
