@@ -1,5 +1,6 @@
-import Footer from "@/components/footer";
+import Navbar from "@/components/navbar";
 import Hero from "@/components/hero";
+import Footer from "@/components/footer";
 import {
   ArrowUpRight,
   BarChart3,
@@ -16,6 +17,7 @@ import Image from "next/image";
 export default async function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
+      <Navbar />
       <Hero />
 
       {/* Features Section */}
@@ -308,7 +310,6 @@ export default async function Home() {
           </div>
         </div>
       </section>
-
       <Footer />
     </div>
   );

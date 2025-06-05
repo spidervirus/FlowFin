@@ -95,12 +95,6 @@ export default function Navbar() {
             Pricing
           </Link>
           <Link
-            href="/resources"
-            className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
-          >
-            Resources
-          </Link>
-          <Link
             href="/about"
             className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
           >
@@ -177,12 +171,6 @@ export default function Navbar() {
             className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
           >
             Pricing
-          </Link>
-          <Link
-            href="/resources"
-            className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
-          >
-            Resources
           </Link>
           <Link
             href="/about"
