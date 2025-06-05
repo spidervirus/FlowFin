@@ -1,10 +1,9 @@
 import { redirect } from 'next/navigation'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 import SetupWizard from '@/components/setup-wizard/setup-wizard'
 
 export default async function SetupPage() {
-  const supabase = createServerComponentClient({ cookies })
+  const supabase = createClient()
 
   // Get session
   const { data: { session } } = await supabase.auth.getSession()

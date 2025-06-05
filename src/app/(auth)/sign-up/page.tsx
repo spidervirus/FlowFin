@@ -91,8 +91,9 @@ export default function SignUp({
         }
       }
 
+      // Redirect to setup for new users - middleware will handle organization check
       router.push(
-        "/dashboard"
+        "/setup"
       );
     } catch (err) {
       console.error("Sign up error:", err);

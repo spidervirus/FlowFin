@@ -6,6 +6,7 @@ import {
   User,
 } from "@supabase/auth-helpers-nextjs";
 import { SupabaseClient } from "@supabase/supabase-js";
+import { getAuthCookieOptions } from '@/lib/utils/cookies';
 
 interface SupabaseContextType {
   supabase: SupabaseClient;
@@ -20,9 +21,8 @@ const SupabaseContext = react.createContext<SupabaseContextType | undefined>(
 export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [supabase] = react.useState(() => createClientComponentClient({
     cookieOptions: {
+      ...getAuthCookieOptions(),
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax' as const,
-      path: '/',
       domain: isBrowser() ? window.location.hostname : undefined,
     }
   }));

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createClientComponentClient, User } from '@supabase/auth-helpers-nextjs';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { getAuthCookieOptions } from '@/lib/utils/cookies';
 
 interface SupabaseContextType {
   supabase: SupabaseClient;
@@ -10,7 +11,9 @@ interface SupabaseContextType {
 const SupabaseContext = createContext<SupabaseContextType | undefined>(undefined);
 
 export function SupabaseProvider({ children }: { children: React.ReactNode }) {
-  const [supabase] = useState(() => createClientComponentClient());
+  const [supabase] = useState(() => createClientComponentClient({
+    cookieOptions: getAuthCookieOptions()
+  }));
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -47,4 +50,4 @@ export function useSupabase() {
     throw new Error('useSupabase must be used within a SupabaseProvider');
   }
   return context;
-} 
+}

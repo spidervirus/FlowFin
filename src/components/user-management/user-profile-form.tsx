@@ -72,15 +72,11 @@ export default function UserProfileForm({
       }
 
       // Update profile in database
-      const { error: profileError } = await supabase.from("user_profiles").upsert({
-        id: session.user.id,
+      const { error: profileError } = await supabase.from("profiles").upsert({
         user_id: session.user.id,
         email: session.user.email,
+        name: formData.full_name,
         full_name: formData.full_name,
-        avatar_url: formData.avatar_url,
-        job_title: formData.job_title,
-        phone: formData.phone,
-        department: formData.department,
         role: "user",
         updated_at: new Date().toISOString(),
       });

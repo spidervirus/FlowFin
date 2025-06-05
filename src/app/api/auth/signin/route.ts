@@ -16,28 +16,9 @@ import {
   ValidationError, 
   ServiceUnavailableError 
 } from '@/lib/api/api-error';
+import { getAuthCookieOptions, getAuthCookieName } from '@/lib/utils/cookies';
 
-// Get the Supabase project reference for consistent cookie naming
-function getAuthCookieName(): string {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) return 'sb-default-auth-token';
-  
-  const matches = supabaseUrl.match(/(?:db|api)\.([^.]+)\.supabase\./);
-  return `sb-${matches?.[1] ?? 'default'}-auth-token`;
-}
 
-// Cookie options for authentication
-function getAuthCookieOptions() {
-  return {
-    name: getAuthCookieName(),
-  path: '/',
-    sameSite: 'lax' as const,
-  secure: process.env.NODE_ENV === 'production',
-  maxAge: 60 * 60 * 24 * 7, // 7 days
-    httpOnly: true,
-    domain: undefined,
-  };
-}
 
 // Validation schema for sign-in requests
 const signInSchema = z.object({
@@ -51,11 +32,9 @@ const signInSchema = z.object({
 
 // Main handler function
 async function signInHandler(request: NextRequest) {
-  // Generate unique request ID for tracing
   const requestId = crypto.randomUUID();
   
   try {
-    // Validate request body using our schema
     const validation = await validateBody(request, signInSchema);
     if (!validation.success) {
       return (validation as { success: false; error: NextResponse<unknown> }).error;
@@ -63,21 +42,38 @@ async function signInHandler(request: NextRequest) {
     
     const { email, password } = validation.data;
 
-    // Initialize Supabase client with cookie handling
     const cookieStore = cookies();
+    const cookieOptions = getAuthCookieOptions();
+    
+    console.debug('[Auth API Debug] Sign-in cookie configuration:', {
+      requestId,
+      cookieConfig: {
+        path: cookieOptions.path,
+        sameSite: cookieOptions.sameSite,
+        secure: cookieOptions.secure
+      },
+      existingCookies: cookieStore.getAll().map(c => c.name)
+    });
+
     const supabase = createRouteHandlerClient({ 
-      cookies: () => cookieStore 
-    }, {
-      cookieOptions: getAuthCookieOptions()
+      cookies: () => cookieStore
     });
 
     // Clean up any stale auth cookies
     const cookieName = getAuthCookieName();
     const allCookies = cookieStore.getAll();
     const authCookies = allCookies.filter(c => c.name.includes('-auth-token') && c.name !== cookieName);
-    authCookies.forEach(cookie => {
-      cookieStore.delete(cookie.name);
-    });
+    
+    if (authCookies.length > 0) {
+      console.debug('[Auth API Debug] Cleaning up stale auth cookies:', {
+        requestId,
+        staleCookies: authCookies.map(c => c.name)
+      });
+      
+      authCookies.forEach(cookie => {
+        cookieStore.delete(cookie.name);
+      });
+    }
 
     // Use withTimeout utility for safe async operation
     try {
@@ -122,13 +118,7 @@ async function signInHandler(request: NextRequest) {
       const authCookie = cookieStore.get(cookieName);
     if (authCookie) {
         const options = getAuthCookieOptions();
-      response.cookies.set(authCookie.name, authCookie.value, {
-        path: options.path,
-        sameSite: options.sameSite,
-        secure: options.secure,
-        maxAge: options.maxAge,
-          httpOnly: options.httpOnly,
-      });
+      response.cookies.set(authCookie.name, authCookie.value, getAuthCookieOptions());
     }
 
     return response;

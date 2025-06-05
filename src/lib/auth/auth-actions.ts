@@ -11,11 +11,11 @@ export async function signUpAction(formData: FormData) {
   const fullName = formData.get("full_name") as string;
 
   if (!email || !password || !fullName) {
-    redirect("/sign-up?error=All fields are required");
+    redirect("/sign-up?error=" + encodeURIComponent("All fields are required"));
   }
 
   if (password.length < 6) {
-    redirect("/sign-up?error=Password must be at least 6 characters long");
+    redirect("/sign-up?error=" + encodeURIComponent("Password must be at least 6 characters long"));
   }
 
   try {
@@ -29,7 +29,7 @@ export async function signUpAction(formData: FormData) {
       .single();
 
     if (existingUser) {
-      redirect("/sign-up?error=A user with this email already exists");
+      redirect("/sign-up?error=" + encodeURIComponent("A user with this email already exists"));
     }
 
     // Create the user
@@ -46,12 +46,12 @@ export async function signUpAction(formData: FormData) {
     if (error) throw error;
 
     revalidatePath("/", "layout");
-    redirect("/sign-in?message=Please check your email to verify your account");
+    redirect("/sign-in?message=" + encodeURIComponent("Please check your email to verify your account"));
   } catch (error) {
     if (error instanceof AuthError) {
       redirect(`/sign-up?error=${encodeURIComponent(error.message)}`);
     }
-    redirect("/sign-up?error=Failed to create account");
+    redirect("/sign-up?error=" + encodeURIComponent("Failed to create account"));
   }
 }
 
@@ -60,7 +60,7 @@ export async function signInAction(formData: FormData) {
   const password = formData.get("password") as string;
 
   if (!email || !password) {
-    redirect("/sign-in?error=Email and password are required");
+    redirect("/sign-in?error=" + encodeURIComponent("Email and password are required"));
   }
 
   try {
@@ -78,7 +78,7 @@ export async function signInAction(formData: FormData) {
     if (error instanceof AuthError) {
       redirect(`/sign-in?error=${encodeURIComponent(error.message)}`);
     }
-    redirect("/sign-in?error=Invalid email or password");
+    redirect("/sign-in?error=" + encodeURIComponent("Invalid email or password"));
   }
 }
 
@@ -93,6 +93,6 @@ export async function signOutAction() {
     redirect("/");
   } catch (error) {
     console.error("Error signing out:", error);
-    redirect("/?error=Failed to sign out");
+    redirect("/?error=" + encodeURIComponent("Failed to sign out"));
   }
 }

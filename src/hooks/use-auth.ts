@@ -3,6 +3,7 @@ import { type Session, type User, type SupabaseClient } from '@supabase/supabase
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
 import { useRouter } from 'next/navigation'
+import { getAuthCookieOptions } from '@/lib/utils/cookies'
 
 export type AuthError = {
   message: string
@@ -30,10 +31,8 @@ export function useAuth() {
   const supabaseClient = useRef<SupabaseClient<Database, "public">>(
     createClientComponentClient<Database>({
       cookieOptions: {
-        name: `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/(?:db|api)\.([^.]+)\.supabase\./)?.[1] ?? 'default'}-auth-token`,
-        path: '/',
+        ...getAuthCookieOptions(),
         domain: typeof window !== 'undefined' ? window.location.hostname : undefined,
-        sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
       }
     })
@@ -287,4 +286,4 @@ export function useAuth() {
     signIn,
     signOut,
   }
-} 
+}

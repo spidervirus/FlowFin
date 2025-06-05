@@ -44,6 +44,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
+    "cookies-next": "^6.0.0",
     "critters": "^0.0.20",
     "dompurify": "^3.0.9",
     "dotenv": "^16.4.7",

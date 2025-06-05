@@ -1,5 +1,6 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+import { getAuthCookieName, getAuthCookieOptions } from '@/lib/utils/cookies';
 
 // Types for creating a supabase client with custom options
 type SupabaseClientOptions = {
@@ -38,14 +39,8 @@ export function createClient(options: SupabaseClientOptions = {}) {
     });
   }
   
-  // Define cookie options
-  const defaultCookieOptions = {
-    path: '/',
-    sameSite: 'lax' as const,
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    // maxAge: -1, // A way to make it a session cookie by default, or handle maxAge per Supabase's options
-  };
+  // Use centralized cookie options
+  const cookieOptions = getAuthCookieOptions();
   
   // Create client using cookies for session management
   const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
@@ -68,7 +63,7 @@ export function createClient(options: SupabaseClientOptions = {}) {
           cookieStore.set({ 
             name: getAuthCookieName(), // Using the standard name for the session cookie
             value, 
-            ...defaultCookieOptions 
+            ...cookieOptions 
             // Supabase might provide its own maxAge via different mechanisms or defaults for session/refresh tokens
           });
       },
@@ -77,7 +72,7 @@ export function createClient(options: SupabaseClientOptions = {}) {
           cookieStore.set({ 
             name: getAuthCookieName(), // Assuming key corresponds to our main auth cookie
             value: '', 
-            ...defaultCookieOptions, 
+            ...cookieOptions, 
             maxAge: 0 
           });
       },
@@ -88,16 +83,7 @@ export function createClient(options: SupabaseClientOptions = {}) {
   return supabase;
 }
 
-/**
- * Get the standardized auth cookie name
- */
-function getAuthCookieName(): string {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) return 'sb-default-auth-token';
-  
-  const matches = supabaseUrl.match(/(?:db|api)\.([^.]+)\.supabase\./);
-  return `sb-${matches?.[1] ?? 'default'}-auth-token`;
-}
+
 
 /**
  * Create a Supabase client with service role privileges

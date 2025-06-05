@@ -308,8 +308,13 @@ DECLARE
     _name TEXT;
     _full_name TEXT;
     _role TEXT;
-    _profile_id UUID;
+    _profile_exists BOOLEAN := FALSE;
+    _error_code TEXT;
+    _error_message TEXT;
 BEGIN
+    -- Log the trigger execution
+    RAISE LOG 'handle_new_user triggered for user: % (email: %)', NEW.id, NEW.email;
+    
     -- Get name, full_name and role from metadata with better defaults
     _name := COALESCE(
         NEW.raw_user_meta_data->>'name',
@@ -322,12 +327,24 @@ BEGIN
         split_part(NEW.email, '@', 1)
     );
     _role := COALESCE(NEW.raw_user_meta_data->>'role', 'user');
-    _profile_id := gen_random_uuid();
-
-    -- Create profile with better error handling
+    
+    RAISE LOG 'Extracted user data - name: %, full_name: %, role: %', _name, _full_name, _role;
+    
+    -- Check if profile already exists to avoid duplicates
+    SELECT EXISTS(
+        SELECT 1 FROM public.profiles WHERE user_id = NEW.id
+    ) INTO _profile_exists;
+    
+    IF _profile_exists THEN
+        RAISE LOG 'Profile already exists for user: %', NEW.id;
+        RETURN NEW;
+    END IF;
+    
+    -- Create profile with enhanced error handling and RLS investigation
     BEGIN
+        RAISE LOG 'Attempting to create profile for user: %', NEW.id;
+        
         INSERT INTO public.profiles (
-            id,
             user_id,
             email,
             name,
@@ -336,7 +353,6 @@ BEGIN
             created_at,
             updated_at
         ) VALUES (
-            _profile_id,
             NEW.id,
             NEW.email,
             _name,
@@ -345,32 +361,83 @@ BEGIN
             NOW(),
             NOW()
         );
-    EXCEPTION WHEN OTHERS THEN
-        RAISE WARNING 'Error creating profile, attempting backup: %', SQLERRM;
         
-        BEGIN
-            INSERT INTO public.user_profiles_backup (
-                id,
-                user_id,
-                email,
-                name,
-                full_name,
-                role,
-                created_at,
-                updated_at
-            ) VALUES (
-                _profile_id,
-                NEW.id,
-                NEW.email,
-                _name,
-                _full_name,
-                _role,
-                NOW(),
-                NOW()
-            );
-        EXCEPTION WHEN OTHERS THEN
-            RAISE WARNING 'Error creating backup profile: %', SQLERRM;
-        END;
+        RAISE LOG 'Profile created successfully for user: %', NEW.id;
+        
+    EXCEPTION 
+        WHEN insufficient_privilege THEN
+            GET STACKED DIAGNOSTICS _error_code = RETURNED_SQLSTATE, _error_message = MESSAGE_TEXT;
+            RAISE WARNING 'RLS policy violation creating profile for user %. Code: %, Message: %', NEW.id, _error_code, _error_message;
+            
+            -- Log RLS context for debugging
+            RAISE LOG 'RLS Debug - auth.uid(): %, auth.role(): %, current_user: %', 
+                auth.uid(), auth.role(), current_user;
+            
+            -- Try backup table
+            BEGIN
+                RAISE LOG 'Attempting backup profile creation for user: %', NEW.id;
+                
+                INSERT INTO public.user_profiles_backup (
+                    user_id,
+                    email,
+                    name,
+                    full_name,
+                    role,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    NEW.id,
+                    NEW.email,
+                    _name,
+                    _full_name,
+                    _role,
+                    NOW(),
+                    NOW()
+                );
+                
+                RAISE LOG 'Backup profile created successfully for user: %', NEW.id;
+                
+            EXCEPTION WHEN OTHERS THEN
+                GET STACKED DIAGNOSTICS _error_code = RETURNED_SQLSTATE, _error_message = MESSAGE_TEXT;
+                RAISE WARNING 'Error creating backup profile for user %. Code: %, Message: %', NEW.id, _error_code, _error_message;
+            END;
+            
+        WHEN unique_violation THEN
+            GET STACKED DIAGNOSTICS _error_code = RETURNED_SQLSTATE, _error_message = MESSAGE_TEXT;
+            RAISE WARNING 'Unique constraint violation creating profile for user %. Code: %, Message: %', NEW.id, _error_code, _error_message;
+            
+        WHEN OTHERS THEN
+            GET STACKED DIAGNOSTICS _error_code = RETURNED_SQLSTATE, _error_message = MESSAGE_TEXT;
+            RAISE WARNING 'Unexpected error creating profile for user %. Code: %, Message: %', NEW.id, _error_code, _error_message;
+            
+            -- Try backup table for any other error
+            BEGIN
+                RAISE LOG 'Attempting backup profile creation due to unexpected error for user: %', NEW.id;
+                
+                INSERT INTO public.user_profiles_backup (
+                    user_id,
+                    email,
+                    name,
+                    full_name,
+                    role,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    NEW.id,
+                    NEW.email,
+                    _name,
+                    _full_name,
+                    _role,
+                    NOW(),
+                    NOW()
+                );
+                
+                RAISE LOG 'Backup profile created successfully for user: %', NEW.id;
+                
+            EXCEPTION WHEN OTHERS THEN
+                GET STACKED DIAGNOSTICS _error_code = RETURNED_SQLSTATE, _error_message = MESSAGE_TEXT;
+                RAISE WARNING 'Error creating backup profile for user %. Code: %, Message: %', NEW.id, _error_code, _error_message;
+            END;
     END;
 
     RETURN NEW;
@@ -765,4 +832,4 @@ BEGIN
     END IF;
 END $$;
 
-COMMIT; 
+COMMIT;

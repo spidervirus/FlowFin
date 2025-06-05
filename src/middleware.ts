@@ -1,6 +1,7 @@
 import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getAuthCookieName } from '@/lib/utils/cookies';
 
 // Define routes that don't require authentication
 const PUBLIC_PATHS = [
@@ -31,7 +32,7 @@ const AUTH_TRANSITIONS = new Map<string, {
 function getClientId(req: NextRequest): string {
   // Try to get a stable identifier in order of preference
   const token = req.cookies.get('sb-access-token')?.value;
-  const sessionId = req.cookies.get(`sb-${process.env.NEXT_PUBLIC_SUPABASE_PROJECT_ID}-auth-token`)?.value;
+  const sessionId = req.cookies.get(getAuthCookieName())?.value;
   const cfConnecting = req.headers.get('cf-connecting-ip');
   const forwarded = req.headers.get('x-forwarded-for')?.split(',')[0];
   const ip = req.ip;

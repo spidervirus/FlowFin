@@ -1,8 +1,9 @@
-"use client";
+import { CookieOptions as SupabaseCookieOptions } from '@supabase/auth-helpers-shared';
+import { getCookie, setCookie as setNextCookie, deleteCookie as deleteNextCookie, hasCookie } from 'cookies-next';
 
 /**
  * Cookie utilities for handling authentication cookies
- * These functions are plain utility functions with NO React dependencies
+ * These functions use cookies-next for better cookie management
  */
 
 /**
@@ -12,7 +13,13 @@ export function getProjectRef(): string {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) return 'default';
   
-  const matches = supabaseUrl.match(/(?:db|api)\.([^.]+)\.supabase\./);
+  // Handle local development URLs
+  if (supabaseUrl.includes('localhost') || /^https?:\/\/\d+\.\d+\.\d+\.\d+/.test(supabaseUrl)) {
+    return 'local';
+  }
+  
+  // Handle cloud Supabase URLs
+  const matches = supabaseUrl.match(/(?:db|api)\.([^.]+)\.supabase\./); 
   return matches?.[1] ?? 'default';
 }
 
@@ -24,58 +31,89 @@ export function getAuthCookieName(): string {
 }
 
 /**
- * Cookie options type
- */
-interface CookieOptions {
-  path?: string;
-  domain?: string;
-  maxAge?: number;
-  expires?: string | Date;
-  sameSite?: 'strict' | 'lax' | 'none';
-  secure?: boolean;
-  httpOnly?: boolean;
-  [key: string]: any;
-}
-
-/**
  * Get consistent cookie options to use across the application
+ * Returns cookie options compatible with Supabase's requirements
  */
-export function getAuthCookieOptions(overrides: CookieOptions = {}): CookieOptions {
-  return {
-    name: getAuthCookieName(),
+export function getAuthCookieOptions(overrides: Partial<SupabaseCookieOptions> = {}): SupabaseCookieOptions {
+  const options: SupabaseCookieOptions = {
+    domain: getProperCookieDomain(),
     path: '/',
-    sameSite: 'lax' as const,
+    sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-    httpOnly: true,
     ...overrides
   };
+
+  console.debug('[Cookie Utils] Generated cookie options:', {
+    ...options,
+    environment: process.env.NODE_ENV,
+    isClient: typeof window !== 'undefined'
+  });
+
+  return options;
 }
 
 /**
- * Get all cookies as an array (client-side)
+ * Get all cookies
  */
-export function getAllCookies(): string[] {
-  if (typeof document === 'undefined') return [];
-  return document.cookie.split(';').map(c => c.trim().split('=')[0]);
+export function getAllCookies(): { [key: string]: any } {
+  // Since cookies-next doesn't have a direct method to get all cookies,
+  // we'll need to implement this differently or remove it if not needed
+  return {};
 }
 
 /**
- * Check if auth cookie exists (client-side)
+ * Check if auth cookie exists
  */
-export function hasAuthCookie(): boolean {
-  if (typeof document === 'undefined') return false;
+export async function hasAuthCookie(): Promise<boolean> {
   const cookieName = getAuthCookieName();
-  return document.cookie.split(';').some(c => c.trim().startsWith(`${cookieName}=`));
+  const exists = await hasCookie(cookieName);
+  
+  console.debug('[Cookie Utils] Checking auth cookie:', {
+    cookieName,
+    exists
+  });
+  
+  return exists;
 }
 
 /**
- * Clear the auth cookie (client-side)
+ * Set a cookie with the specified options
+ */
+export function setCookie(name: string, value: string, options: Partial<SupabaseCookieOptions> = {}): void {
+  const defaultOptions: Partial<SupabaseCookieOptions> = {
+    path: '/',
+    domain: getProperCookieDomain(),
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
+  };
+  setNextCookie(name, value, { ...defaultOptions, ...options });
+}
+
+/**
+ * Delete a cookie by name
+ */
+export function deleteCookie(name: string, options: Partial<SupabaseCookieOptions> = {}): void {
+  const defaultOptions: Partial<SupabaseCookieOptions> = {
+    path: '/',
+    domain: getProperCookieDomain(),
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
+  };
+  deleteNextCookie(name, { ...defaultOptions, ...options });
+}
+
+/**
+ * Clear the auth cookie
  */
 export function clearAuthCookie(): void {
-  if (typeof document === 'undefined') return;
   const cookieName = getAuthCookieName();
-  document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+  const options: Partial<SupabaseCookieOptions> = {
+    path: '/',
+    domain: getProperCookieDomain(),
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
+  };
+  deleteNextCookie(cookieName, options);
 }
 
 /**
@@ -168,75 +206,8 @@ export function diagnoseCookieIssues(): CookieIssueResult {
   };
 }
 
-/**
- * Set a cookie with the given name, value, and options.
- */
-export function setCookie(name: string, value: string, options: CookieOptions = {}): void {
-  if (typeof document === 'undefined') return;
-  
-  const cookieOptions = {
-    path: '/',
-    ...options
-  };
-  
-  let cookieString = `${name}=${encodeURIComponent(value)}`;
-  
-  if (cookieOptions.path) {
-    cookieString += `; path=${cookieOptions.path}`;
-  }
-  
-  if (cookieOptions.maxAge) {
-    cookieString += `; max-age=${cookieOptions.maxAge}`;
-  }
-  
-  if (cookieOptions.expires) {
-    const expires = typeof cookieOptions.expires === 'string' 
-      ? cookieOptions.expires 
-      : cookieOptions.expires.toUTCString();
-    cookieString += `; expires=${expires}`;
-  }
-  
-  if (cookieOptions.domain) {
-    cookieString += `; domain=${cookieOptions.domain}`;
-  }
-  
-  if (cookieOptions.secure) {
-    cookieString += '; secure';
-  }
-  
-  if (cookieOptions.sameSite) {
-    cookieString += `; samesite=${cookieOptions.sameSite}`;
-  }
-  
-  if (cookieOptions.httpOnly) {
-    cookieString += '; httponly';
-  }
-  
-  document.cookie = cookieString;
-}
+
 
 /**
  * Get a cookie by name
  */
-export function getCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  
-  const cookies = document.cookie.split(';');
-  for (const cookie of cookies) {
-    const [cookieName, cookieValue] = cookie.trim().split('=');
-    if (cookieName === name) {
-      return decodeURIComponent(cookieValue);
-    }
-  }
-  
-  return null;
-}
-
-/**
- * Delete a cookie by name
- */
-export function deleteCookie(name: string, path = '/'): void {
-  if (typeof document === 'undefined') return;
-  
-  document.cookie = `${name}=; path=${path}; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-}

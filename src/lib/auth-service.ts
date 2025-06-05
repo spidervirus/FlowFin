@@ -50,9 +50,9 @@ export class AuthService {
     try {
       // First check if profile exists
       const { data: existingProfile, error: fetchError } = await this.supabase
-        .from("user_profiles")
+        .from("profiles")
         .select("*")
-        .eq("id", user.id)
+        .eq("user_id", user.id)
         .single();
 
       if (fetchError && fetchError.code !== "PGRST116") {
@@ -79,11 +79,16 @@ export class AuthService {
         
         while (retryCount < maxRetries) {
           const { error: insertError } = await this.supabase
-            .from("user_profiles")
+            .from("profiles")
             .insert([
               {
-                ...profileData,
+                user_id: user.id,
+                email: user.email,
+                name: user.user_metadata?.full_name || "",
+                full_name: user.user_metadata?.full_name || "",
+                role: "user",
                 created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               },
             ]);
 
@@ -105,9 +110,14 @@ export class AuthService {
       } else {
         // Update existing profile
         const { error: updateError } = await this.supabase
-          .from("user_profiles")
-          .update(profileData)
-          .eq("id", user.id);
+          .from("profiles")
+          .update({
+            email: user.email,
+            name: user.user_metadata?.full_name || "",
+            full_name: user.user_metadata?.full_name || "",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", user.id);
 
         if (updateError) {
           console.error("Error updating profile:", updateError);
@@ -247,8 +257,8 @@ export class AuthService {
 
       // First check if user already exists
       const { data: existingUser, error: checkError } = await this.supabase
-        .from('user_profiles')
-        .select('id')
+        .from('profiles')
+        .select('user_id')
         .eq('email', email)
         .single();
 
@@ -476,12 +486,12 @@ export class AuthService {
       }
 
       const { error: updateError } = await this.supabase
-        .from("user_profiles")
+        .from("profiles")
         .update({
           ...profileData,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", user.id);
+        .eq("user_id", user.id);
 
       if (updateError) {
         return {
@@ -568,9 +578,9 @@ export class AuthService {
       }
 
       const { data: profile, error: profileError } = await this.supabase
-        .from("user_profiles")
+        .from("profiles")
         .select("*")
-        .eq("id", user.id)
+        .eq("user_id", user.id)
         .single();
 
       if (profileError) {

@@ -1,15 +1,74 @@
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { handleError, showErrorToast } from "@/lib/error-handler";
+import { getAuthCookieOptions } from "@/lib/utils/cookies";
+import { createAdminClient } from '@/lib/supabase/supabase-admin';
+import { logger } from '@/lib/logger';
 
-// Extract project reference from Supabase URL for consistent cookie naming
-const getProjectRef = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
+interface ErrorMetadata {
+  message: string;
+  code?: string;
+  context?: ProfileCreationContext;
+}
+
+export interface ProfileCreationContext {
+  userId: string;
+  email: string;
+  name: string;
+  fullName: string;
+  role: string;
+  timestamp: string;
+}
+
+/**
+ * Creates a user profile with comprehensive debugging
+ */
+export async function createProfileWithDebug(context: ProfileCreationContext) {
+  const { userId, email, name, fullName, role, timestamp } = context;
   
-  const matches = supabaseUrl.match(/(?:db|api)\.([^.]+)\.supabase\./);
-  return matches?.[1] ?? 'default';
-};
+  logger.debug('Starting profile creation with context', context);
+  
+  try {
+    const supabase = createAdminClient();
+    
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .insert([
+        {
+          id: userId,
+          email,
+          // username: name, // username column does not exist, using full_name for now
+          full_name: name, // Assuming 'name' from context is the intended username/display name
+          // full_name: fullName, // fullName from context might be redundant if 'name' is the primary display identifier
+          // role, // role column does not exist in user_profiles
+          created_at: timestamp,
+          updated_at: timestamp
+        }
+      ])
+      .select()
+      .single();
+    
+    if (profileError) {
+      logger.error('Failed to create user profile', profileError, { context });
+      throw profileError;
+    }
+    
+    logger.info('Successfully created user profile', {
+      userId,
+      email,
+      profile
+    });
+    
+    return profile;
+  } catch (error) {
+    logger.error(
+       'Unexpected error during profile creation',
+       error instanceof Error ? error : new Error(String(error)),
+       { context }
+     );
+    throw error;
+  }
+}
 
 // Create a singleton instance of the Supabase client
 let supabaseInstance: ReturnType<typeof createClientComponentClient> | null = null;
@@ -17,24 +76,28 @@ let supabaseInstance: ReturnType<typeof createClientComponentClient> | null = nu
 const getSupabase = () => {
   if (!supabaseInstance) {
     supabaseInstance = createClientComponentClient({
-      cookieOptions: {
-        name: `sb-${getProjectRef()}-auth-token`,
-        domain: process.env.NODE_ENV === 'production' ? process.env.NEXT_PUBLIC_SITE_URL?.replace('https://', '') : undefined,
-        path: '/',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-      }
+      cookieOptions: getAuthCookieOptions()
     });
 
     // Add debug listener for auth state changes
     supabaseInstance.auth.onAuthStateChange((event, session) => {
-      console.debug('[Auth Service Debug] Auth state changed:', {
-        event,
-        hasSession: !!session,
-        userId: session?.user?.id,
-        accessToken: session?.access_token ? '[REDACTED]' : undefined,
-        cookies: typeof window !== 'undefined' ? document.cookie.split(';').map(c => c.trim().split('=')[0]) : []
-      });
+      try {
+        const cookieOptions = getAuthCookieOptions();
+        console.debug('[Auth Service Debug] Auth state changed:', {
+          event,
+          hasSession: !!session,
+          userId: session?.user?.id,
+          accessToken: session?.access_token ? '[REDACTED]' : undefined,
+          cookieConfig: {
+            path: cookieOptions.path,
+            sameSite: cookieOptions.sameSite,
+            secure: cookieOptions.secure
+          },
+          cookies: typeof window !== 'undefined' ? document.cookie.split(';').map(c => c.trim().split('=')[0]) : []
+        });
+      } catch (error) {
+        console.error('[Auth Service Error] Failed to handle auth state change:', error);
+      }
     });
   }
   return supabaseInstance;
